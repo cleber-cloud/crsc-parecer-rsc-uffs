@@ -4,8 +4,13 @@
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "crsc-parecer-rsc-uffs-session-v1";
-  const STORAGE_META_KEY = "crsc-parecer-rsc-uffs-session-meta-v1";
+  /** Persistência contínua (estilo calculadora): IndexedDB + fallback localStorage. */
+  const IDB_NAME = "crsc-parecer-rsc-uffs";
+  const IDB_STORE = "keyval";
+  const IDB_KEY = "session";
+  const IDB_META_KEY = "session-meta";
+  const LS_KEY = "crsc-parecer-rsc-uffs-session-v1"; // migração
+  const LS_META_KEY = "crsc-parecer-rsc-uffs-session-meta-v1";
   const SNAPSHOT_VERSION = 1;
 
   const state = {
@@ -1148,7 +1153,7 @@
       const btnCmp = $("btnToggleCompare");
       if (btnCmp) btnCmp.disabled = false;
       scheduleAutosave();
-      saveToLocalStorage(false);
+      persistSession();
       const m = data._merge || {};
       const cat = data._catalogMeta || {};
       const comQtd =
@@ -1421,72 +1426,123 @@
     };
   }
 
-  function updateSessionStatus(snap) {
-    const el = $("sessionStatus");
-    if (!el) return;
-    if (!snap || !snap.savedAtLabel) {
-      try {
-        const meta = localStorage.getItem(STORAGE_META_KEY);
-        if (meta) {
-          const m = JSON.parse(meta);
-          el.textContent =
-            "Sessão no navegador: " +
-            (m.savedAtLabel || m.savedAt || "salva") +
-            (m.siape ? " · SIAPE " + m.siape : "") +
-            (m.processo ? " · " + m.processo : "");
-          return;
+  function openIdb() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(new Error("IndexedDB indisponível"));
+        return;
+      }
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
         }
-      } catch (_) {}
-      el.textContent = "Nenhuma sessão salva neste navegador.";
-      return;
-    }
-    const siape = snap.state && snap.state.req && snap.state.req.siape;
-    const proc =
-      (snap.state && snap.state.numeroProcesso) ||
-      (snap.forms && snap.forms.numProcesso) ||
-      "";
-    el.textContent =
-      "Sessão: " +
-      snap.savedAtLabel +
-      (siape ? " · SIAPE " + siape : "") +
-      (proc ? " · " + proc : "");
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () =>
+        reject(req.error || new Error("Falha ao abrir IndexedDB"));
+    });
   }
 
-  function saveToLocalStorage(showToast) {
+  function idbGet(key) {
+    return openIdb().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, "readonly");
+          const g = tx.objectStore(IDB_STORE).get(key);
+          g.onsuccess = () => resolve(g.result);
+          g.onerror = () => reject(g.error);
+        })
+    );
+  }
+
+  function idbSet(key, value) {
+    return openIdb().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, "readwrite");
+          tx.objectStore(IDB_STORE).put(value, key);
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => reject(tx.error);
+        })
+    );
+  }
+
+  function idbDel(key) {
+    return openIdb().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, "readwrite");
+          tx.objectStore(IDB_STORE).delete(key);
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => reject(tx.error);
+        })
+    );
+  }
+
+  function updateSessionStatus(snapOrMeta) {
+    const el = $("sessionStatus");
+    if (!el) return;
+    const m = snapOrMeta || null;
+    if (!m) {
+      el.textContent =
+        "Sessão salva automaticamente neste navegador (IndexedDB).";
+      return;
+    }
+    const label = m.savedAtLabel || m.savedAt || "";
+    const siape =
+      m.siape ||
+      (m.state && m.state.req && m.state.req.siape) ||
+      "";
+    const proc =
+      m.processo ||
+      (m.state && m.state.numeroProcesso) ||
+      (m.forms && m.forms.numProcesso) ||
+      "";
+    el.textContent =
+      "Sessão automática" +
+      (label ? ": " + label : "") +
+      (siape ? " · SIAPE " + siape : "") +
+      (proc ? " · " + proc : "") +
+      " · IndexedDB";
+  }
+
+  /** Sempre grava no IndexedDB (silencioso). */
+  async function persistSession() {
+    if (suppressAutosave) return false;
     try {
       const snap = buildSnapshot();
-      const json = JSON.stringify(snap);
-      localStorage.setItem(STORAGE_KEY, json);
-      localStorage.setItem(
-        STORAGE_META_KEY,
-        JSON.stringify({
-          savedAt: snap.savedAt,
-          savedAtLabel: snap.savedAtLabel,
-          siape: snap.state.req && snap.state.req.siape,
-          processo: snap.state.numeroProcesso,
-          version: snap.version,
-          bytes: json.length,
-        })
-      );
-      updateSessionStatus(snap);
-      if (showToast !== false) {
-        toast(
-          "Dados salvos no navegador (" +
-            Math.round(json.length / 1024) +
-            " KB).",
-          "ok"
-        );
+      const meta = {
+        savedAt: snap.savedAt,
+        savedAtLabel: snap.savedAtLabel,
+        siape: snap.state.req && snap.state.req.siape,
+        processo: snap.state.numeroProcesso,
+        version: snap.version,
+      };
+      try {
+        await idbSet(IDB_KEY, snap);
+        await idbSet(IDB_META_KEY, meta);
+      } catch (idbErr) {
+        // fallback localStorage (sessões menores)
+        try {
+          localStorage.setItem(LS_KEY, JSON.stringify(snap));
+          localStorage.setItem(LS_META_KEY, JSON.stringify(meta));
+        } catch (lsErr) {
+          console.warn("[sessão] falha IDB e localStorage", idbErr, lsErr);
+          return false;
+        }
       }
+      // limpa LS legado se IDB ok (evita duplicar)
+      try {
+        if (window.indexedDB) {
+          /* keep LS only as emergency; optional clear after successful IDB */
+        }
+      } catch (_) {}
+      updateSessionStatus(meta);
       return true;
     } catch (e) {
-      console.error(e);
-      toast(
-        e && e.name === "QuotaExceededError"
-          ? "Espaço do navegador insuficiente. Use “Backup (arquivo)” e limpe dados antigos."
-          : "Não foi possível salvar no navegador: " +
-              ((e && e.message) || String(e)),
-        "err"
-      );
+      console.warn("[sessão] persistência falhou", e);
       return false;
     }
   }
@@ -1495,16 +1551,8 @@
     if (suppressAutosave) return;
     clearTimeout(autosaveTimer);
     autosaveTimer = setTimeout(() => {
-      // autosave silencioso se houver algo relevante
-      if (
-        state.req ||
-        state.numeroProcesso ||
-        state.comissaoId ||
-        (state.hipotesesSelecionadas && state.hipotesesSelecionadas.length)
-      ) {
-        saveToLocalStorage(false);
-      }
-    }, 1200);
+      persistSession();
+    }, 600);
   }
 
   function downloadBackup() {
@@ -1525,13 +1573,62 @@
       a.download = `Backup_CRSC_Parecer_${safe}_${stamp}.json`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-      // também grava local
-      saveToLocalStorage(false);
+      persistSession();
       toast("Backup completo baixado (JSON com toda a sessão).", "ok");
     } catch (e) {
       console.error(e);
       toast("Falha ao gerar backup: " + ((e && e.message) || e), "err");
     }
+  }
+
+  /** Carrega a sessão do IndexedDB (ou LS legado). Sempre na abertura. */
+  async function loadPersistedSession() {
+    let snap = null;
+    try {
+      snap = await idbGet(IDB_KEY);
+    } catch (_) {
+      snap = null;
+    }
+    if (!snap) {
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (raw) {
+          snap = JSON.parse(raw);
+          // migra para IDB
+          try {
+            await idbSet(IDB_KEY, snap);
+            if (snap.savedAt) {
+              await idbSet(IDB_META_KEY, {
+                savedAt: snap.savedAt,
+                savedAtLabel: snap.savedAtLabel,
+                siape: snap.state && snap.state.req && snap.state.req.siape,
+                processo: snap.state && snap.state.numeroProcesso,
+                version: snap.version,
+              });
+            }
+          } catch (_) {}
+        }
+      } catch (_) {
+        snap = null;
+      }
+    }
+    if (!snap || !snap.state) {
+      updateSessionStatus(null);
+      return false;
+    }
+    const hasContent =
+      snap.state.req ||
+      snap.state.numeroProcesso ||
+      snap.state.comissaoId ||
+      (snap.state.hipotesesSelecionadas &&
+        snap.state.hipotesesSelecionadas.length);
+    if (!hasContent) {
+      updateSessionStatus(snap);
+      return false;
+    }
+    applySnapshot(snap, { toast: false });
+    updateSessionStatus(snap);
+    return true;
   }
 
   function applySnapshot(snap, opts) {
@@ -1669,31 +1766,19 @@
     }
   }
 
-  function loadFromLocalStorage(showToast) {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        toast("Não há dados salvos neste navegador.", "err");
-        return false;
-      }
-      const snap = JSON.parse(raw);
-      return applySnapshot(snap, { toast: showToast !== false });
-    } catch (e) {
-      console.error(e);
-      toast("Dados locais corrompidos ou ilegíveis.", "err");
-      return false;
-    }
-  }
-
-  function clearLocalData() {
+  async function clearLocalData() {
     const ok = window.confirm(
       "Limpar todos os dados locais deste navegador e reiniciar a tela?\n\nIsso não apaga arquivos de backup que você já baixou."
     );
     if (!ok) return;
     suppressAutosave = true;
     try {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(STORAGE_META_KEY);
+      await idbDel(IDB_KEY);
+      await idbDel(IDB_META_KEY);
+    } catch (_) {}
+    try {
+      localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(LS_META_KEY);
     } catch (_) {}
 
     // reset state
@@ -1769,7 +1854,7 @@
         return;
       }
       if (applySnapshot(snap)) {
-        saveToLocalStorage(false);
+        persistSession();
       }
     } catch (e) {
       console.error(e);
@@ -1790,15 +1875,13 @@
       if (e.key === "Escape") closeMsgModal();
     });
 
-    // Sessão / backup
-    if ($("btnSaveLocal"))
-      $("btnSaveLocal").addEventListener("click", () => saveToLocalStorage(true));
-    if ($("btnLoadLocal"))
-      $("btnLoadLocal").addEventListener("click", () => loadFromLocalStorage(true));
+    // Backup / limpar (sessão é automática via IndexedDB)
     if ($("btnBackup"))
       $("btnBackup").addEventListener("click", downloadBackup);
     if ($("btnClearLocal"))
-      $("btnClearLocal").addEventListener("click", clearLocalData);
+      $("btnClearLocal").addEventListener("click", () => {
+        clearLocalData();
+      });
     if ($("btnRestoreBackup")) {
       $("btnRestoreBackup").addEventListener("click", () => {
         const inp = $("backupFileInput");
@@ -1944,18 +2027,14 @@
       });
     }
 
-    // Restaura sessão automaticamente se existir
-    try {
-      if (localStorage.getItem(STORAGE_KEY)) {
-        loadFromLocalStorage(false);
-        updateSessionStatus(null);
-        const el = $("sessionStatus");
-        if (el && !el.textContent.includes("Nenhuma")) {
-          /* already set */
+    // Sempre puxa a sessão do IndexedDB (até limpar dados)
+    loadPersistedSession()
+      .then((restored) => {
+        if (restored) {
+          toast("Sessão restaurada automaticamente do navegador.", "info");
         }
-        toast("Sessão anterior restaurada do navegador.", "info");
-      }
-    } catch (_) {}
+      })
+      .catch((e) => console.warn("[sessão] restore", e));
   }
 
   document.addEventListener("DOMContentLoaded", bind);
