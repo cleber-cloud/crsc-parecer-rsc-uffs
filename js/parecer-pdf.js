@@ -591,7 +591,7 @@
       });
       gap(4);
       text(
-        "A Comissão solicita o seguinte esclarecimento ou complementação, de natureza geral, sem vinculação direta a um critério específico do catálogo RSC-PCCTAE:",
+        "A Comissão solicita o seguinte esclarecimento ou complementação, de natureza geral, sem vinculação direta a um critério específico do RSC-PCCTAE:",
         { size: 10, lh: 13 }
       );
       gap(6);
