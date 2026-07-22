@@ -618,14 +618,6 @@
       gap(22);
     });
 
-    gap(8);
-    text(
-      `Documento gerado em ${new Date().toLocaleString(
-        "pt-BR"
-      )}.`,
-      { size: 8, color: rgb(0.4, 0.4, 0.4) }
-    );
-
     const bytes = await pdf.save({ useObjectStreams: false });
     return new Uint8Array(bytes);
   }
