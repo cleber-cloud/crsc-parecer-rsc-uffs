@@ -12,7 +12,6 @@
     prioridade: false,
     diligencias: false,
     vigencia: "",
-    anexoNumero: "I",
     hipotesesSelecionadas: [],
     /** @type {Record<string, boolean>} chave siape → marcado */
     signerChecked: {},
@@ -410,7 +409,6 @@
       prioridade: state.prioridade,
       diligencias: state.diligencias,
       vigencia: state.vigencia,
-      anexoNumero: state.anexoNumero || "I",
       comissao: RSCComissoes.getComissao(state.comissaoId),
       assinantes: collectAssinantes(),
       avaliacao: av,
@@ -464,10 +462,6 @@
         ? e.target.value.split("-").reverse().join("/")
         : "";
     });
-    $("anexoNum").addEventListener("input", (e) => {
-      state.anexoNumero = e.target.value || "I";
-    });
-
     const drop = $("fileDrop");
     const input = $("fileInput");
     drop.addEventListener("click", () => input.click());

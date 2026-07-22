@@ -1,10 +1,11 @@
 /**
- * Gera PDF do parecer CRSC (modelo ANEXO XX).
+ * Gera PDF do parecer CRSC-PCCTAE.
  */
 (function (global) {
   "use strict";
 
   let fontCache = null;
+  let brasaoCache = null;
 
   async function loadFonts(pdf) {
     if (!global.PDFLib) throw new Error("PDFLib não carregado");
@@ -23,6 +24,25 @@
     const font = await pdf.embedFont(fontCache.r, { subset: true });
     const fontBold = await pdf.embedFont(fontCache.b, { subset: true });
     return { font, fontBold };
+  }
+
+  async function loadBrasao(pdf) {
+    if (!brasaoCache) {
+      try {
+        const res = await fetch("./brasaodarepublica.png");
+        if (res.ok) brasaoCache = new Uint8Array(await res.arrayBuffer());
+      } catch (_) {}
+    }
+    if (!brasaoCache) return null;
+    try {
+      return await pdf.embedPng(brasaoCache);
+    } catch (_) {
+      try {
+        return await pdf.embedJpg(brasaoCache);
+      } catch (_) {
+        return null;
+      }
+    }
   }
 
   function wrap(text, font, size, maxW) {
@@ -45,6 +65,7 @@
     const { PDFDocument, rgb } = global.PDFLib;
     const pdf = await PDFDocument.create();
     const { font, fontBold } = await loadFonts(pdf);
+    const brasao = await loadBrasao(pdf);
     const W = 595.28;
     const H = 841.89;
     const margin = 48;
@@ -53,7 +74,7 @@
     const green = rgb(0, 0.5, 0.22);
 
     let page = pdf.addPage([W, H]);
-    let y = H - margin;
+    let y = H - 36;
 
     function newPage() {
       page = pdf.addPage([W, H]);
@@ -66,11 +87,16 @@
       const size = opts.size || 10;
       const f = opts.bold ? fontBold : font;
       const color = opts.color || black;
+      const align = opts.align || "left";
       const lines = wrap(str, f, size, opts.maxW || maxW);
       const lh = opts.lh || size + 4;
       for (const ln of lines) {
         ensure(lh);
-        page.drawText(ln, { x: margin, y: y - size, size, font: f, color });
+        let x = margin;
+        if (align === "center") {
+          x = (W - f.widthOfTextAtSize(ln, size)) / 2;
+        }
+        page.drawText(ln, { x, y: y - size, size, font: f, color });
         y -= lh;
       }
     }
@@ -89,19 +115,48 @@
     }
 
     const proc = ctx.numeroProcesso || "23205.XXXXXX/20XX-XX";
-    const anexo = ctx.anexoNumero || "XX";
+    const unidadeNome = ctx.comissao?.nome || "—";
 
-    text(
-      `ANEXO ${anexo} - Parecer sobre Requerimento de Reconhecimento de Saberes e Competências - ${proc}`,
-      { size: 11, bold: true, lh: 15 }
-    );
-    gap(6);
+    // Cabeçalho: brasão + textos centralizados
+    if (brasao) {
+      const bw = 72;
+      const bh = (brasao.height / brasao.width) * bw;
+      page.drawImage(brasao, {
+        x: (W - bw) / 2,
+        y: y - bh,
+        width: bw,
+        height: bh,
+      });
+      y -= bh + 14;
+    } else {
+      gap(8);
+    }
+
     text("UNIVERSIDADE FEDERAL DA FRONTEIRA SUL — CRSC-PCCTAE", {
-      size: 9,
-      color: green,
+      size: 11,
+      bold: true,
+      align: "center",
+      lh: 15,
     });
-    text(ctx.comissao?.nome || "", { size: 9, color: green });
-    gap(10);
+    text(unidadeNome, {
+      size: 11,
+      bold: true,
+      align: "center",
+      lh: 15,
+    });
+    gap(8);
+    text(
+      "Parecer sobre Requerimento de Reconhecimento de Saberes e Competências",
+      { size: 11, bold: true, align: "center", lh: 14 }
+    );
+    gap(4);
+    text(`Processo: ${proc}`, {
+      size: 11,
+      bold: true,
+      align: "center",
+      lh: 14,
+    });
+    gap(12);
     line();
 
     text("1. Identificação", { size: 12, bold: true });
