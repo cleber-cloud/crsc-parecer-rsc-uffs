@@ -61,12 +61,17 @@
     const d = descricao.toLowerCase();
     if (/membro de n[uú]cleos|comiss[oõ]es ou comit|conselhos superiores|defensor dativo|exame de sele/i.test(d))
       return "I";
-    if (/projetos institucionais|capacita[cç][aã]o, f[oó]rum|forma[cç][aã]o continuada|orienta[cç][aã]o, tutoria|cooperac/i.test(d))
+    if (
+      /atividades t[eé]cnicas e\/ou especializadas em projetos|projetos institucionais|capacita[cç][aã]o, f[oó]rum|forma[cç][aã]o continuada|orienta[cç][aã]o, tutoria|coopera[cç][aã]o t[eé]cnica|oficina, workshop/i.test(
+        d
+      )
+    )
       return "II";
     if (/premia[cç][aã]o/i.test(d)) return "III";
     if (/fiscaliza[cç][aã]o de contratos|termo de refer[eê]ncia|planejamento de contrata|licita[cç][aã]o|sistemas estruturantes|insalubridade|respons[aá]vel por setor/i.test(d))
       return "IV";
-    if (/cargo de dire[cç][aã]o|fun[cç][aã]o gratificada|cd-0|fg-0/i.test(d)) return "V";
+    if (/cargo de dire[cç][aã]o|fun[cç][aã]o gratificada|cd\s*-?\s*0|fg\s*-?\s*0/i.test(d))
+      return "V";
     if (/patente|propriedade intelectual|transfer[eê]ncia de tecnologia|incentivo [aà] qualifica|grupo de pesquisa|capta[cç][aã]o de recursos|cap[ií]tulo de livro|congresso|difus[aã]o|coorienta|epidem|pandemia|obra art[ií]stica|material t[eé]cnico/i.test(d))
       return "VI";
     return null;
@@ -83,6 +88,7 @@
       /(\d{1,2})\s+((?:Participa[cç][aã]o|Exerc[ií]cio|Elabora[cç][aã]o|Atua[cç][aã]o|Apresenta[cç][aã]o|Coordena[cç][aã]o|Recebimento|Produ[cç][aã]o|Autoria|Conclus[aã]o|Desempenho|Publica[cç][aã]o|Avalia[cç][aã]o|Representa[cç][aã]o|Carta patente)[\s\S]*?)\s+(Por\s+.+?)\s+(\d{1,3}[.,]\d)\s+(\d{1,3}[.,]\d)/gi;
 
     let m;
+    const seen = new Set();
     while ((m = re.exec(flat)) !== null) {
       let desc = clean(m[2]);
       // cut if glued next item number at end
@@ -93,6 +99,9 @@
       if (po == null || desc.length < 25) continue;
       // skip declaration junk
       if (/declaro|fatos apresentados|responsabilidade administrativa/i.test(desc)) continue;
+      const key = desc.slice(0, 80) + "|" + po;
+      if (seen.has(key)) continue;
+      seen.add(key);
       itens.push({
         grupo: inferGrupo(desc),
         n: Number(m[1]),
@@ -218,13 +227,13 @@
 
   async function parseRequerimentoPdf(file) {
     const structured = await extractPdfTextStructured(file);
-    // prefer joined lines with newlines for some patterns, but flat works
-    const data = parseRequerimentoText(structured.raw + "\n" + structured.flat);
-    // if header failed on flat only, try lines[0]
+    // Usar texto espacial (linhas) + flat único (evita duplicar itens)
+    const data = parseRequerimentoText(structured.flat);
     if (!data.nome && structured.lines[0]) {
       const h2 = parseHeader(structured.lines.slice(0, 8).join(" "));
-      Object.assign(data, h2);
+      Object.assign(data, Object.fromEntries(Object.entries(h2).filter(([, v]) => v)));
     }
+    // reparse itens a partir de flat only already done
     data._textLength = structured.flat.length;
     data._sourceName = file.name || "requerimento.pdf";
     data._lineCount = structured.lines.length;
