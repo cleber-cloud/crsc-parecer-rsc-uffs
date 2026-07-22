@@ -547,18 +547,18 @@
     kv("Data da diligência: ", dataDil);
     gap(12);
 
-    text("2. Critérios objeto da diligência", { size: 12, bold: true });
-    gap(4);
-    text(
-      "A Comissão solicita o esclarecimento e/ou a complementação documental dos critérios específicos abaixo, no prazo e forma estabelecidos no regimento da CRSC-PCCTAE e na legislação aplicável.",
-      { size: 10, lh: 13 }
-    );
-    gap(8);
-
     const itens = ctx.itensDiligencia || [];
-    if (!itens.length) {
-      text("Nenhum item marcado para diligência.", { size: 10 });
-    } else {
+    const dilGeral = (ctx.diligenciaGeral || "").trim();
+    let sec = 2;
+
+    if (itens.length) {
+      text(`${sec}. Critérios objeto da diligência`, { size: 12, bold: true });
+      gap(4);
+      text(
+        "A Comissão solicita o esclarecimento e/ou a complementação documental dos critérios específicos abaixo, no prazo e forma estabelecidos no regimento da CRSC-PCCTAE e na legislação aplicável.",
+        { size: 10, lh: 13 }
+      );
+      gap(8);
       itens.forEach((it, i) => {
         ensure(90);
         text(
@@ -580,10 +580,35 @@
         text(it.texto || "—", { size: 10, lh: 13, bold: true });
         gap(10);
       });
+      sec++;
+      gap(6);
     }
 
-    gap(6);
-    text("3. Encaminhamento", { size: 12, bold: true });
+    if (dilGeral) {
+      text(`${sec}. Diligência geral (sem vínculo a critérios específicos)`, {
+        size: 12,
+        bold: true,
+      });
+      gap(4);
+      text(
+        "A Comissão solicita o seguinte esclarecimento ou complementação, de natureza geral, sem vinculação direta a um critério específico do catálogo RSC-PCCTAE:",
+        { size: 10, lh: 13 }
+      );
+      gap(6);
+      text(dilGeral, { size: 10, lh: 13, bold: true });
+      sec++;
+      gap(10);
+    }
+
+    if (!itens.length && !dilGeral) {
+      text("2. Conteúdo da diligência", { size: 12, bold: true });
+      gap(4);
+      text("Nenhuma diligência registrada.", { size: 10 });
+      sec = 3;
+      gap(6);
+    }
+
+    text(`${sec}. Encaminhamento`, { size: 12, bold: true });
     gap(4);
     text(
       "Devolve-se o processo ao(à) servidor(a) interessado(a) para cumprimento da diligência, com posterior retorno à CRSC-PCCTAE para continuidade da análise do requerimento de RSC-PCCTAE.",
@@ -591,7 +616,8 @@
     );
     gap(14);
 
-    text("4. Assinaturas da CRSC-PCCTAE", { size: 12, bold: true });
+    sec++;
+    text(`${sec}. Assinaturas da CRSC-PCCTAE`, { size: 12, bold: true });
     gap(4);
     text(
       `Unidade: ${unidadeNome} | Designação: Portaria nº ${

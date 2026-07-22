@@ -40,6 +40,9 @@
     diligenciaOpenIdx: null,
     /** índice do item com caixa de observação aberta */
     obsOpenIdx: null,
+    /** diligência geral (sem vínculo a critério) */
+    diligenciaGeral: "",
+    diligenciaGeralOpen: false,
     /** painéis recolhidos */
     signersPanelHidden: false,
     hipotesesPanelHidden: false,
@@ -145,17 +148,63 @@
     else box.classList.add("hidden");
   }
 
+  function countDiligencias() {
+    const nItens = (state.req?.itens || []).filter(
+      (i) => i.diligencia && i.diligencia.texto
+    ).length;
+    const geral = !!(state.diligenciaGeral && state.diligenciaGeral.trim());
+    return { nItens, geral, total: nItens + (geral ? 1 : 0) };
+  }
+
   function updateDiligenciaBtn() {
     const btn = $("btnGerarDiligencia");
     if (!btn) return;
-    const n = (state.req?.itens || []).filter(
-      (i) => i.diligencia && i.diligencia.texto
-    ).length;
-    btn.disabled = !state.req || n === 0;
+    const { nItens, geral, total } = countDiligencias();
+    btn.disabled = !state.req || total === 0;
+    const parts = [];
+    if (nItens) parts.push(`${nItens} item(ns)`);
+    if (geral) parts.push("geral");
     btn.textContent =
-      n > 0
-        ? `Gerar diligência (PDF) · ${n} item(ns)`
+      total > 0
+        ? `Gerar diligência (PDF) · ${parts.join(" + ")}`
         : "Gerar diligência (PDF)";
+    const btnG = $("btnDilGeral");
+    if (btnG) {
+      btnG.disabled = !state.req;
+      btnG.textContent = geral
+        ? "Editar diligência geral"
+        : "Inserir diligência sem vínculo a critérios";
+      btnG.classList.toggle("btn-primary", geral || state.diligenciaGeralOpen);
+      btnG.classList.toggle("btn-secondary", !(geral || state.diligenciaGeralOpen));
+    }
+    renderDiligenciaGeralUI();
+  }
+
+  function renderDiligenciaGeralUI() {
+    const panel = $("diligenciaGeralPanel");
+    const saved = $("diligenciaGeralSaved");
+    const ta = $("diligenciaGeralTxt");
+    if (!panel) return;
+    if (state.diligenciaGeralOpen) {
+      panel.classList.remove("hidden");
+      if (ta && document.activeElement !== ta) {
+        ta.value = state.diligenciaGeral || "";
+      }
+    } else {
+      panel.classList.add("hidden");
+    }
+    if (saved) {
+      const txt = (state.diligenciaGeral || "").trim();
+      if (txt && !state.diligenciaGeralOpen) {
+        saved.classList.remove("hidden");
+        saved.innerHTML =
+          "<strong>Diligência geral (sem vínculo a critérios):</strong> " +
+          esc(txt);
+      } else {
+        saved.classList.add("hidden");
+        saved.innerHTML = "";
+      }
+    }
   }
 
   const $ = (id) => document.getElementById(id);
@@ -1365,9 +1414,10 @@
     const itensDil = (state.req.itens || []).filter(
       (i) => i.diligencia && i.diligencia.texto
     );
-    if (!itensDil.length) {
+    const dilGeral = (state.diligenciaGeral || "").trim();
+    if (!itensDil.length && !dilGeral) {
       return toast(
-        "Marque ao menos um critério com “Marcar para diligência” e salve o texto.",
+        "Inclua diligência em ao menos um critério ou use “Inserir diligência sem vínculo a critérios”.",
         "err"
       );
     }
@@ -1384,6 +1434,7 @@
       comissao: RSCComissoes.getComissao(state.comissaoId),
       assinantes: collectAssinantes(),
       avaliacao: av,
+      diligenciaGeral: dilGeral,
       itensDiligencia: itensDil.map((i) => ({
         criterionId: i.criterionId,
         grupo: i.grupo,
@@ -1451,6 +1502,8 @@
         confirmedFields: cloneJson(state.confirmedFields || {}),
         diligenciaOpenIdx: null,
         obsOpenIdx: null,
+        diligenciaGeral: state.diligenciaGeral || "",
+        diligenciaGeralOpen: false,
         signersPanelHidden: !!state.signersPanelHidden,
         hipotesesPanelHidden: !!state.hipotesesPanelHidden,
         _avaliacao: state._avaliacao ? cloneJson(state._avaliacao) : null,
@@ -1719,6 +1772,8 @@
       state.confirmedFields = cloneJson(s.confirmedFields || {});
       state.diligenciaOpenIdx = null;
       state.obsOpenIdx = null;
+      state.diligenciaGeral = s.diligenciaGeral || "";
+      state.diligenciaGeralOpen = false;
       state.signersPanelHidden = !!s.signersPanelHidden;
       state.hipotesesPanelHidden = !!s.hipotesesPanelHidden;
       state._avaliacao = s._avaliacao ? cloneJson(s._avaliacao) : null;
@@ -1851,6 +1906,8 @@
     state.confirmedFields = {};
     state.diligenciaOpenIdx = null;
     state.obsOpenIdx = null;
+    state.diligenciaGeral = "";
+    state.diligenciaGeralOpen = false;
     state.signersPanelHidden = false;
     state.hipotesesPanelHidden = false;
     state._avaliacao = null;
@@ -2059,7 +2116,57 @@
     $("btnParecer").addEventListener("click", gerarParecer);
     const btnDil = $("btnGerarDiligencia");
     if (btnDil) btnDil.addEventListener("click", gerarDiligencia);
+
+    const btnDilGeral = $("btnDilGeral");
+    if (btnDilGeral) {
+      btnDilGeral.addEventListener("click", () => {
+        if (!state.req) return toast("Carregue o requerimento primeiro.", "err");
+        state.diligenciaGeralOpen = !state.diligenciaGeralOpen;
+        updateDiligenciaBtn();
+        if (state.diligenciaGeralOpen) {
+          const ta = $("diligenciaGeralTxt");
+          if (ta) {
+            ta.value = state.diligenciaGeral || "";
+            ta.focus();
+          }
+        }
+      });
+    }
+    if ($("btnSaveDilGeral")) {
+      $("btnSaveDilGeral").addEventListener("click", () => {
+        const ta = $("diligenciaGeralTxt");
+        const txt = (ta && ta.value.trim()) || "";
+        if (!txt) {
+          toast("Descreva a diligência geral antes de salvar.", "err");
+          return;
+        }
+        state.diligenciaGeral = txt;
+        state.diligenciaGeralOpen = false;
+        updateDiligenciaBtn();
+        scheduleAutosave();
+        toast("Diligência geral salva.", "ok");
+      });
+    }
+    if ($("btnCancelDilGeral")) {
+      $("btnCancelDilGeral").addEventListener("click", () => {
+        state.diligenciaGeralOpen = false;
+        updateDiligenciaBtn();
+      });
+    }
+    if ($("btnClearDilGeral")) {
+      $("btnClearDilGeral").addEventListener("click", () => {
+        state.diligenciaGeral = "";
+        state.diligenciaGeralOpen = false;
+        const ta = $("diligenciaGeralTxt");
+        if (ta) ta.value = "";
+        updateDiligenciaBtn();
+        scheduleAutosave();
+        toast("Diligência geral removida.", "ok");
+      });
+    }
+
     syncDiligenciaDatasUI();
+    updateDiligenciaBtn();
 
     // vigência padrão = hoje
     const vig = $("vigencia");

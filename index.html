@@ -139,7 +139,21 @@
         <button type="button" class="btn btn-secondary" id="btnEditQtdDecl">Editar quantidade declarada</button>
       </div>
       <div id="checklistBody" class="checklist-groups" style="margin-top:1rem"></div>
+      <div id="diligenciaGeralPanel" class="diligencia-geral-panel hidden" style="margin-top:1rem">
+        <label for="diligenciaGeralTxt"><strong>Diligência geral</strong> (sem vínculo a critérios específicos)</label>
+        <p class="muted small" style="margin:.25rem 0 .5rem">
+          Use quando o pedido de esclarecimento ou complemento não se refere a um item pontuado do catálogo.
+        </p>
+        <textarea id="diligenciaGeralTxt" placeholder="Descreva a diligência geral…"></textarea>
+        <div class="btn-row" style="margin-top:.55rem">
+          <button type="button" class="btn btn-primary" id="btnSaveDilGeral">Salvar diligência geral</button>
+          <button type="button" class="btn btn-secondary" id="btnCancelDilGeral">Cancelar</button>
+          <button type="button" class="btn btn-secondary" id="btnClearDilGeral">Remover</button>
+        </div>
+      </div>
+      <div id="diligenciaGeralSaved" class="diligencia-saved hidden" style="margin-top:.75rem"></div>
       <div class="btn-row" style="margin-top:1.25rem">
+        <button type="button" class="btn btn-secondary" id="btnDilGeral">Inserir diligência sem vínculo a critérios</button>
         <button type="button" class="btn btn-secondary" id="btnGerarDiligencia" disabled>Gerar diligência (PDF)</button>
       </div>
     </section>
