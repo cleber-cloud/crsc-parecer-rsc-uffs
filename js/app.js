@@ -224,7 +224,13 @@
       <div class="metrics">
         <div class="metric"><div class="k">Servidor</div><div class="v" style="font-size:1rem">${esc(r.nome)}</div></div>
         <div class="metric"><div class="k">SIAPE</div><div class="v" style="font-size:1rem">${esc(r.siape)}</div></div>
-        <div class="metric"><div class="k">Nível pedido</div><div class="v" style="font-size:1rem">RSC ${esc(r.nivelRsc || "—")}</div></div>
+        <div class="metric"><div class="k">Nível pedido</div><div class="v" style="font-size:1rem">
+          <select id="nivelOverride" style="font-weight:800;font-size:1rem;padding:.2rem .4rem">
+            ${["I","II","III","IV","V","VI"].map((n) =>
+              `<option value="${n}" ${r.nivelRsc === n ? "selected" : ""}>RSC ${n}</option>`
+            ).join("")}
+          </select>
+        </div></div>
         <div class="metric"><div class="k">Pontos (declarados)</div><div class="v" style="font-size:1rem">${r.pontuacaoTotalDeclarada ?? "—"}</div></div>
       </div>
       <p class="muted small" style="margin-top:.75rem">
@@ -233,6 +239,21 @@
         <strong>Ingresso:</strong> ${esc(r.dataIngresso)} ·
         <strong>E-mail:</strong> ${esc(r.email)}
       </p>`;
+    const sel = document.getElementById("nivelOverride");
+    if (sel) {
+      sel.addEventListener("change", () => {
+        state.req.nivelRsc = sel.value;
+        const nv = RSCRegras.NIVEIS[sel.value];
+        if (nv) {
+          state.req.pontuacaoMinimaDeclarada = nv.minPontos;
+          if (state.req.pontuacaoTotalDeclarada != null) {
+            state.req.excedenteDeclarado =
+              Math.round((state.req.pontuacaoTotalDeclarada - nv.minPontos) * 10) / 10;
+          }
+        }
+        updateAvaliacao();
+      });
+    }
   }
 
   function pontosItem(it) {
