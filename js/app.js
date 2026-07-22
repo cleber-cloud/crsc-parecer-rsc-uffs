@@ -1448,6 +1448,18 @@
         $("hipotesesPanel").classList.toggle("hidden");
       });
     }
+    // toggle painel assinantes
+    const toggleSig = $("toggleSigners");
+    if (toggleSig) {
+      toggleSig.addEventListener("click", () => {
+        const panel = $("signersPanel");
+        if (!panel) return;
+        panel.classList.toggle("hidden");
+        toggleSig.textContent = panel.classList.contains("hidden")
+          ? "Mostrar assinantes"
+          : "Ocultar assinantes";
+      });
+    }
   }
 
   document.addEventListener("DOMContentLoaded", bind);

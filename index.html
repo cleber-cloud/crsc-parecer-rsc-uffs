@@ -86,11 +86,16 @@
       </div>
       <div id="impedimentoAlert" class="alert alert-warn hidden" style="margin-top:1rem"></div>
       <div style="margin-top:1rem">
-        <label>Assinantes da CRSC (titular e suplente por segmento)</label>
-        <p class="muted small" style="margin:.25rem 0 .5rem">
-          Marcar o <strong>titular</strong> desmarca o suplente do mesmo segmento e vice-versa.
-        </p>
-        <div id="signers" class="signers"></div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem">
+          <label style="margin:0">Assinantes da CRSC (titular e suplente por segmento)</label>
+          <button type="button" class="btn btn-secondary btn-sm" id="toggleSigners">Mostrar / ocultar</button>
+        </div>
+        <div id="signersPanel" class="signers-panel">
+          <p class="muted small" style="margin:.35rem 0 .5rem">
+            Marcar o <strong>titular</strong> desmarca o suplente do mesmo segmento e vice-versa.
+          </p>
+          <div id="signers" class="signers"></div>
+        </div>
       </div>
     </section>
 

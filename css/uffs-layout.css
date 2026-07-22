@@ -297,6 +297,16 @@ footer.app-footer .wrap{max-width:1100px;margin:0 auto}
 footer.app-footer a{color:#fff}
 .hidden{display:none!important}
 .signers{display:grid;gap:.85rem}
+.signers-panel{
+  margin-top:.5rem;
+  max-height:420px;
+  overflow:auto;
+  border:1px solid #d8e2dc;
+  border-radius:12px;
+  padding:.65rem .75rem;
+  background:#fafcfb;
+}
+.signers-panel.hidden{display:none!important}
 .signer-pair{
   border:1px solid #d8e2dc;border-radius:12px;padding:.65rem .75rem;background:#fafcfb;
 }
