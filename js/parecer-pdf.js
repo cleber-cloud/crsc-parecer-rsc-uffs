@@ -187,7 +187,7 @@
     const fonts = await loadFonts(pdf);
     const brasao = await loadBrasao(pdf);
     const d = makeDrawer(pdf, fonts);
-    const { text, kv, gap, line, ensure } = d;
+    const { text, kv, gap, line, ensure, newPage } = d;
 
     const proc = ctx.numeroProcesso || "23205.XXXXXX/20XX-XX";
     const unidadeNome = (ctx.comissao && ctx.comissao.nome) || "—";
@@ -355,17 +355,71 @@
     );
     gap(14);
 
-    // Relatório auxiliar didático dos itens (após o parecer)
-    text("4. Relatório auxiliar da análise por critério", {
-      size: 12,
-      bold: true,
-    });
+    // 4. Assinaturas logo após o parecer (item 3)
+    text("4. Assinaturas da CRSC-PCCTAE", { size: 12, bold: true });
     gap(4);
     text(
-      "Este relatório é material de apoio à comissão. Resume, de forma didática, o que o(a) servidor(a) declarou, o que a comissão aceitou e eventuais ressalvas (observações ou diligências) por critério específico do catálogo RSC-PCCTAE.",
-      { size: 9, lh: 12 }
+      `Unidade: ${unidadeNome} | Designação: Portaria nº ${
+        (ctx.comissao && ctx.comissao.portariaDesignacao) || "—"
+      }`,
+      { size: 9 }
+    );
+    gap(10);
+
+    const signers = ctx.assinantes || [];
+    signers.forEach((s) => {
+      ensure(50);
+      text(`${s.nome}`, { size: 10, bold: true });
+      text(`SIAPE ${s.siape} — ${s.segmento || ""} (${s.funcao || "Titular"})`, {
+        size: 9,
+      });
+      text("_________________________________", { size: 10 });
+      gap(12);
+    });
+
+    gap(8);
+    text(
+      `Documento gerado em ${new Date().toLocaleString(
+        "pt-BR"
+      )} — ferramenta CRSC Parecer RSC-UFFS (teste). A deliberação formal permanece com a comissão.`,
+      { size: 8, color: rgb(0.4, 0.4, 0.4) }
+    );
+
+    // ——— ANEXO: relatório auxiliar (nova página) ———
+    newPage();
+    text("ANEXO", {
+      size: 14,
+      bold: true,
+      align: "center",
+      lh: 18,
+    });
+    gap(4);
+    text("Relatório auxiliar da análise por critério", {
+      size: 12,
+      bold: true,
+      align: "center",
+      lh: 15,
+    });
+    gap(4);
+    text(`Processo: ${proc}`, {
+      size: 10,
+      bold: true,
+      align: "center",
+      lh: 13,
+    });
+    text(
+      `Servidor(a): ${(ctx.req && ctx.req.nome) || "—"} · SIAPE ${
+        (ctx.req && ctx.req.siape) || "—"
+      }`,
+      { size: 9, align: "center", lh: 12 }
     );
     gap(8);
+    line();
+    text(
+      "Este anexo é material de apoio à comissão. Resume, de forma didática, o que o(a) servidor(a) declarou, o que a comissão aceitou e eventuais ressalvas (observações ou diligências) por critério específico do catálogo RSC-PCCTAE. Não substitui o parecer formal.",
+      { size: 9, lh: 12 }
+    );
+    gap(10);
 
     const rel = ctx.itensRelatorio || [];
     if (!rel.length) {
@@ -374,7 +428,6 @@
         { size: 10 }
       );
     } else {
-      // agrupar por grupo
       const order = ["I", "II", "III", "IV", "V", "VI"];
       order.forEach((g) => {
         const items = rel.filter((it) => String(it.grupo) === g);
@@ -419,34 +472,9 @@
         String(Math.round(somaAceita * 10) / 10)
       );
     }
-    gap(14);
-
-    text("5. Assinaturas da CRSC-PCCTAE", { size: 12, bold: true });
-    gap(4);
-    text(
-      `Unidade: ${unidadeNome} | Designação: Portaria nº ${
-        (ctx.comissao && ctx.comissao.portariaDesignacao) || "—"
-      }`,
-      { size: 9 }
-    );
     gap(10);
-
-    const signers = ctx.assinantes || [];
-    signers.forEach((s) => {
-      ensure(50);
-      text(`${s.nome}`, { size: 10, bold: true });
-      text(`SIAPE ${s.siape} — ${s.segmento || ""} (${s.funcao || "Titular"})`, {
-        size: 9,
-      });
-      text("_________________________________", { size: 10 });
-      gap(12);
-    });
-
-    gap(8);
     text(
-      `Documento gerado em ${new Date().toLocaleString(
-        "pt-BR"
-      )} — ferramenta CRSC Parecer RSC-UFFS (teste). A deliberação formal permanece com a comissão.`,
+      "Fim do anexo — relatório auxiliar.",
       { size: 8, color: rgb(0.4, 0.4, 0.4) }
     );
 
