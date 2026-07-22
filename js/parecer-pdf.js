@@ -372,17 +372,13 @@
 
     const signers = ctx.assinantes || [];
     signers.forEach((s) => {
-      ensure(55);
+      ensure(48);
       text(`${s.nome}`, { size: 10, bold: true, align: "center" });
       text(`SIAPE ${s.siape} — ${s.segmento || ""} (${s.funcao || "Titular"})`, {
         size: 9,
         align: "center",
       });
-      text("_________________________________", {
-        size: 10,
-        align: "center",
-      });
-      gap(14);
+      gap(22);
     });
 
     // ——— ANEXO: relatório auxiliar (nova página) ———
@@ -614,13 +610,13 @@
       );
     }
     signers.forEach((s) => {
-      ensure(50);
-      text(`${s.nome}`, { size: 10, bold: true });
+      ensure(48);
+      text(`${s.nome}`, { size: 10, bold: true, align: "center" });
       text(`SIAPE ${s.siape} — ${s.segmento || ""} (${s.funcao || "Titular"})`, {
         size: 9,
+        align: "center",
       });
-      text("_________________________________", { size: 10 });
-      gap(12);
+      gap(22);
     });
 
     gap(8);
