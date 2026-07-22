@@ -414,7 +414,7 @@
       alert.innerHTML =
         "<strong>Impedimento:</strong> o(a) requerente consta como membro desta CRSC (" +
         hits.map((h) => h.nome + " / " + h.funcao).join("; ") +
-        "). Redistribuir o processo a outra comissão (Regimento CRSC).";
+        "). Atenção para não constar como assinante.";
     } else {
       alert.classList.add("hidden");
     }
