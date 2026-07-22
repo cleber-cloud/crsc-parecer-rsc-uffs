@@ -1178,31 +1178,40 @@
           ? cat.comPontuacao
           : (data.itens || []).filter((i) => (Number(i.qtdDeclarada) || 0) > 0)
               .length;
+      const textLines = m.textLines != null ? m.textLines : data._lineCount || 0;
+      const scanOnly = textLines === 0 && (m.ocrLines || 0) > 0;
       const miss = [];
       if (!data.nome) miss.push("nome");
       if (!data.siape) miss.push("SIAPE");
       if (!data.nivelRsc) miss.push("nível");
       if (!comQtd) miss.push("quantidades");
       prog.textContent =
-        `Pronto · catálogo ${data.itens.length} · ${comQtd} com qtd · fusão ${
-          m.winner || "text/ocr"
-        }` +
+        `Pronto · ${comQtd} item(ns) com qtd` +
+        (scanOnly
+          ? " · PDF só imagem (OCR)"
+          : ` · fusão ${m.winner || "text/ocr"}`) +
         (m.ocrConfidence != null
           ? ` · OCR ~${Math.round(m.ocrConfidence)}%`
-          : "") +
-        (m.fieldsConflict
-          ? ` · ${m.fieldsConflict} campo(s) com discórdia resolvida`
           : "");
-      if (miss.length) {
+      if (scanOnly && comQtd) {
         toast(
-          `Extração parcial — confira: ${miss.join(
-            ", "
-          )}. ${comQtd} critério(s) com quantidade no PDF.`,
+          `Este PDF não tem texto selecionável (scan/imagem). A leitura veio do OCR (~${Math.round(
+            m.ocrConfidence || 0
+          )}%). Confira quantidades e campos em amarelo — SIAPE ${data.siape || "—"}, RSC ${data.nivelRsc || "—"}, ${comQtd} item(ns).`,
+          "warn"
+        );
+      } else if (miss.length) {
+        toast(
+          (scanOnly
+            ? "PDF só imagem e o OCR não recuperou o suficiente. "
+            : "Extração parcial — confira: ") +
+            miss.join(", ") +
+            `. ${comQtd} item(ns) com quantidade.`,
           "err"
         );
       } else {
         toast(
-          `Catálogo completo (${data.itens.length}) · ${comQtd} com pontuação declarada · RSC ${data.nivelRsc} · SIAPE ${data.siape}.`,
+          `${comQtd} item(ns) com pontuação · RSC ${data.nivelRsc} · SIAPE ${data.siape}.`,
           "ok"
         );
       }

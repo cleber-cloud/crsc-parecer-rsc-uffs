@@ -134,24 +134,59 @@ window.RSC_NIVEIS = [{"id":"I","name":"RSC-PCCTAE I","equivalence":"Ensino Fund.
     const matches = [];
     const unmatched = [];
 
+    /**
+     * OCR de PDF escaneado costuma perder a vírgula decimal (7,5 → 75, 4,5 → 45).
+     * Com o item casado no catálogo, recalcula qtd com pts/unid. oficiais.
+     */
+    function deriveQtdFromCatalog(it, catalogPu) {
+      let pu = Number(it.pontosUnitario);
+      let po = Number(it.pontosObtidos);
+      if (!Number.isFinite(po) || po <= 0 || !catalogPu) {
+        const q0 = Number(it.qtdDeclarada);
+        return Number.isFinite(q0) && q0 > 0 ? q0 : 0;
+      }
+      // pts/unid. lidos 10× maiores que o catálogo (vírgula perdida)
+      if (Number.isFinite(pu) && Math.abs(pu / 10 - catalogPu) < 0.08) {
+        const qHi = po / catalogPu;
+        const qLo = po / 10 / catalogPu;
+        // ambos os números inflados: 75 75 → 1 unidade de 7,5
+        if (
+          qHi > 5 &&
+          Math.abs(qLo - Math.round(qLo)) < 0.12 &&
+          Math.abs(qHi - 10 * Math.round(qLo)) < 0.6
+        ) {
+          po = po / 10;
+        }
+        pu = catalogPu;
+      } else {
+        pu = catalogPu;
+      }
+      let qtd = po / pu;
+      if (Math.abs(qtd - Math.round(qtd)) < 0.15) qtd = Math.round(qtd);
+      else qtd = Math.round(qtd * 1000) / 1000;
+      if (!Number.isFinite(qtd) || qtd < 0) qtd = 0;
+      // se ainda absurdo (>40), tenta po/10
+      if (qtd > 40 && Math.abs(po / 10 / pu - Math.round(po / 10 / pu)) < 0.12) {
+        qtd = Math.round(po / 10 / pu);
+      }
+      return qtd;
+    }
+
     (rawItens || []).forEach((it, idx) => {
       const { id, score } = matchCriterionId(it);
-      let qtd = Number(it.qtdDeclarada);
-      if (!Number.isFinite(qtd) || qtd < 0) {
-        const pu = Number(it.pontosUnitario);
-        const po = Number(it.pontosObtidos);
-        if (pu > 0 && Number.isFinite(po)) qtd = Math.round((po / pu) * 1000) / 1000;
-        else qtd = 0;
-      }
-      if (Math.abs(qtd - Math.round(qtd)) < 1e-6) qtd = Math.round(qtd);
-
       if (!id) {
         unmatched.push({ index: idx, item: it, score });
         return;
       }
+      const meta = metaAll[id];
+      let qtd = deriveQtdFromCatalog(it, meta && meta.pointsPerUnit);
+      if ((!qtd || qtd <= 0) && Number(it.qtdDeclarada) > 0) {
+        qtd = Number(it.qtdDeclarada);
+      }
+      if (Math.abs(qtd - Math.round(qtd)) < 1e-6) qtd = Math.round(qtd);
+
       matches.push({ index: idx, criterionId: id, score, qtd });
       const prev = qtdById.get(id) || 0;
-      // se o mesmo critério aparecer 2x no PDF, soma quantidades
       qtdById.set(id, Math.round((prev + qtd) * 1000) / 1000);
     });
 

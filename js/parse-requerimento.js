@@ -166,8 +166,10 @@
 
   const UNIT =
     "Por\\s+(?:designa[cç][aã]o|projeto|produto|evento|sistema|curso|publica[cç][aã]o|patente|capacita[cç][aã]o|mandato|ano ou fra[cç][aã]o(?:\\s+acima de seis meses)?)";
+  // OCR de PDF escaneado costuma perder a vírgula (7,5 → 75); aceita inteiro ou decimal
+  const NUM = "(\\d{1,3}(?:[.,]\\d{1,2})?)";
   const SCORE_TAIL = new RegExp(
-    "(" + UNIT + ")\\s+(\\d{1,3}[.,]\\d)\\s+(\\d{1,3}[.,]\\d)",
+    "(" + UNIT + ")\\s+" + NUM + "\\s+" + NUM,
     "gi"
   );
 
@@ -238,7 +240,10 @@
       const re = new RegExp(
         "(\\d{1,2})?\\s*((?:Coordena|Participa|Exerc[ií]cio|Elabora|Atua|Apresenta|Recebimento|Produ|Autoria|Conclus|Desempenho|Publica|Avalia|Representa|Carta patente|Coopera)[\\s\\S]*?)\\s+(" +
           UNIT +
-          ")\\s+(\\d{1,3}[.,]\\d)\\s+(\\d{1,3}[.,]\\d)",
+          ")\\s+" +
+          NUM +
+          "\\s+" +
+          NUM,
         "gi"
       );
       while ((m = re.exec(t)) !== null) {
@@ -254,7 +259,7 @@
 
       // Caso A: linha com número + scores no fim (item completo ou início com scores)
       const full = ln.match(
-        /^(\d{1,2})\s+(.+?)\s+(Por\s+.+?)\s+(\d{1,3}[.,]\d)\s+(\d{1,3}[.,]\d)\s*$/i
+        /^(\d{1,2})\s+(.+?)\s+(Por\s+.+?)\s+(\d{1,3}(?:[.,]\d{1,2})?)\s+(\d{1,3}(?:[.,]\d{1,2})?)\s*$/i
       );
       if (full && ITEM_START.test(full[2])) {
         flushPending();
@@ -331,7 +336,7 @@
             pending.desc = clean(pending.desc + " " + ln);
             // maybe scores appear only after merge
             const scored = clean(pending.desc).match(
-              /^(.+?)\s+(Por\s+.+?)\s+(\d{1,3}[.,]\d)\s+(\d{1,3}[.,]\d)\s*$/i
+              /^(.+?)\s+(Por\s+.+?)\s+(\d{1,3}(?:[.,]\d{1,2})?)\s+(\d{1,3}(?:[.,]\d{1,2})?)\s*$/i
             );
             if (scored) {
               pending.desc = scored[1];
