@@ -1,16 +1,9 @@
 /**
- * Extrai dados do PDF de Requerimento RSC gerado pela calculadora UFFS.
+ * Extrai dados do PDF de Requerimento RSC (calculadora UFFS).
+ * Usa ordenação espacial (pdf.js) — o texto vem sem rótulos fixos.
  */
 (function (global) {
   "use strict";
-
-  function normalize(s) {
-    return String(s || "")
-      .replace(/\u00a0/g, " ")
-      .replace(/[ \t]+/g, " ")
-      .replace(/\s*\n\s*/g, "\n")
-      .trim();
-  }
 
   function parseNumberBR(s) {
     if (s == null || s === "") return null;
@@ -19,224 +12,228 @@
     return Number.isFinite(n) ? n : null;
   }
 
-  function afterLabel(text, label) {
-    const re = new RegExp(
-      label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*[:]?\\s*([^\\n]+)",
-      "i"
-    );
-    const m = text.match(re);
-    return m ? m[1].trim() : "";
+  function clean(s) {
+    return String(s || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/[‐‑‒–—―]/g, "-")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
   /**
-   * @param {string} fullText
+   * Agrupa itens de texto por linha (Y) e ordena.
    */
-  function parseRequerimentoText(fullText) {
-    const text = normalize(fullText);
-    const flat = text.replace(/\n/g, " ");
-
-    const nome =
-      afterLabel(text, "Nome") ||
-      (flat.match(/Nome:\s*([A-Za-zÀ-ú' .\-]+?)\s+SIAPE/i) || [])[1] ||
-      "";
-    const siape =
-      afterLabel(text, "SIAPE") ||
-      (flat.match(/SIAPE:\s*(\d{5,8})/i) || [])[1] ||
-      "";
-    const cargo =
-      afterLabel(text, "Cargo") ||
-      (flat.match(/Cargo:\s*([^\n]+?)(?:Data de ingresso|N[ií]vel)/i) || [])[1] ||
-      "";
-    const ingresso =
-      afterLabel(text, "Data de ingresso em IFE") ||
-      afterLabel(text, "Data de ingresso") ||
-      (flat.match(/(\d{2}\/\d{2}\/\d{4})/) || [])[1] ||
-      "";
-    const lotacao =
-      afterLabel(text, "Lota[cç][aã]o".replace(/\\/g, "")) ||
-      afterLabel(text, "Lotação") ||
-      (flat.match(/Lota[cç][aã]o:\s*(.+?)\s+(?:Fun[cç][aã]o|E-mail)/i) ||
-        [])[1] ||
-      "";
-    const email =
-      afterLabel(text, "E-mail") ||
-      (flat.match(/([a-z0-9._%+-]+@uffs\.edu\.br)/i) || [])[1] ||
-      "";
-
-    // Nível de classificação A-E
-    let nivelClassificacao = "";
-    if (/N[ií]vel de Classifica[cç][aã]o:[\s\S]{0,40}\bE\b/i.test(text) && /\[\s*[xX]\s*\]\s*E|E\s*[xX]/i.test(text)) {
-      // heuristic
-    }
-    const classMatch = text.match(/N[ií]vel de Classifica[cç][aã]o:[\s\S]{0,80}?([A-E])\s*(?:\[?\s*[xX])/i)
-      || text.match(/\b([A-E])\s*\[?\s*[xX]\s*\]?\s*(?:\n|Fun|E-mail|2\.)/i);
-    // From sample: E is checked
-    if (/N[ií]vel de Classifica[cç][aã]o[\s\S]{0,30}E/i.test(text)) {
-      // try find X near E
-      if (/E\s*\[?\s*[xX]|\[\s*[xX]\s*\]\s*E|E\s*[xX]/i.test(text) || /Classifica[cç][aã]o:[\s\S]{0,50}E/i.test(text)) {
-        nivelClassificacao = "E";
-      }
-    }
-
-    // Nível RSC pretendido
-    let nivelRsc = "";
-    const niveis = ["VI", "V", "IV", "III", "II", "I"];
-    for (const n of niveis) {
-      const re = new RegExp(
-        "(?:\\[\\s*[xX]\\s*\\]|[xX])\\s*RSC-PCCTAE\\s*" + n + "\\b|RSC-PCCTAE\\s*" + n + "\\s*(?:\\[\\s*[xX]\\s*\\]|[xX])",
-        "i"
-      );
-      if (re.test(text) || new RegExp("RSC-PCCTAE\\s*" + n + "[\\s\\S]{0,15}[xX]", "i").test(text)) {
-        // weaker: if "Nível de RSC pretendido" section has X next to VI
-        nivelRsc = n;
-        break;
-      }
-    }
-    // fallback from "nível RSC-PCCTAE VI"
-    if (!nivelRsc) {
-      const m = text.match(/n[ií]vel\s+RSC-PCCTAE\s+(I{1,3}|IV|V|VI)\b/i);
-      if (m) nivelRsc = m[1].toUpperCase();
-    }
-    // sample PDF has X RSC-PCCTAE VI
-    if (!nivelRsc && /RSC-PCCTAE\s+VI/i.test(text) && /pretendido/i.test(text)) {
-      nivelRsc = "VI";
-    }
-
-    const pontMin =
-      parseNumberBR(
-        (text.match(/Pontua[cç][aã]o m[ií]nima necess[aá]ria:\s*([\d.,]+)/i) ||
-          [])[1]
-      ) || null;
-    const pontTotal =
-      parseNumberBR(
-        (text.match(/Pontua[cç][aã]o total apresentada:\s*([\d.,]+)/i) || [])[1]
-      ) || null;
-    const qtdCriterios =
-      parseNumberBR(
-        (text.match(
-          /Quantidade de crit[eé]rios espec[ií]ficos utilizados:\s*([\d.,]+)/i
-        ) || [])[1]
-      ) || null;
-    const excedente =
-      parseNumberBR(
-        (text.match(
-          /Pontua[cç][aã]o total excedente[^:]*:\s*([\d.,]+)/i
-        ) || [])[1]
-      ) || 0;
-    const saldoAnterior =
-      parseNumberBR(
-        (text.match(
-          /Saldo de pontua[cç][aã]o de concess[aã]o anterior:\s*([\d.,]+)/i
-        ) || [])[1]
-      ) || 0;
-
-    // Itens: linhas com pontuação obtida — extrair blocos por "Critério X -"
-    const itens = [];
-    const critBlocks = text.split(/Crit[eé]rio\s+(I{1,3}|IV|V|VI)\s*[-–—]/i);
-    // split gives [before, g1, after, g2, after...]
-    for (let i = 1; i < critBlocks.length; i += 2) {
-      const grupo = String(critBlocks[i]).toUpperCase();
-      const body = critBlocks[i + 1] || "";
-      const end = body.search(/Crit[eé]rio\s+(I{1,3}|IV|V|VI)\s*[-–—]|TOTAL\s*\(|4\.\s*DECLARA/i);
-      const chunk = end >= 0 ? body.slice(0, end) : body;
-
-      // find numeric rows: description ... unit points unit points obtained
-      // Pattern: number then description then "Por ..." then two numbers
-      const rowRe =
-        /(\d+)\s+([\s\S]+?)\s+(Por [^\d\n]+?)\s+([\d]+[.,][\d]+|[\d]+)\s+([\d]+[.,][\d]+|[\d]+)/gi;
-      let m;
-      const seen = new Set();
-      while ((m = rowRe.exec(chunk)) !== null) {
-        const desc = m[2].replace(/\s+/g, " ").trim();
-        if (/^Subtotal/i.test(desc) || desc.length < 20) continue;
-        const key = grupo + "|" + desc.slice(0, 40);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const pontosUnit = parseNumberBR(m[4]);
-        const pontosObtidos = parseNumberBR(m[5]);
-        // skip subtotal lines where "pontos" are huge headers
-        if (pontosObtidos == null) continue;
-        itens.push({
-          grupo,
-          n: Number(m[1]),
-          descricao: desc,
-          unidade: m[3].replace(/\s+/g, " ").trim(),
-          pontosUnitario: pontosUnit,
-          pontosObtidos,
-          aceito: "pend", // pend | ok | no
-          obs: "",
-        });
-      }
-    }
-
-    // fallback simpler extraction if no items
-    if (!itens.length) {
-      const simple = [
-        ...text.matchAll(
-          /(Participa[cç][aã]o|Exerc[ií]cio|Elabora[cç][aã]o|Atua[cç][aã]o|Apresenta[cç][aã]o|Coordena[cç][aã]o|Recebimento|Produ[cç][aã]o|Autoria|Conclus[aã]o)[^\n]{20,220}/gi
-        ),
-      ];
-      simple.forEach((m, idx) => {
-        itens.push({
-          grupo: null,
-          n: idx + 1,
-          descricao: m[0].replace(/\s+/g, " ").trim(),
-          unidade: "",
-          pontosUnitario: null,
-          pontosObtidos: null,
-          aceito: "pend",
-          obs: "",
-        });
-      });
-    }
-
-    return {
-      nome: nome.replace(/\s+SIAPE.*$/i, "").trim(),
-      siape: String(siape).replace(/\D/g, ""),
-      cargo: cargo.replace(/\s+Data.*$/i, "").trim(),
-      dataIngresso: ingresso,
-      nivelClassificacao: nivelClassificacao || "E",
-      lotacao: lotacao.replace(/\s+Fun[cç].*$/i, "").trim(),
-      email: email.trim(),
-      nivelRsc: nivelRsc,
-      pontuacaoMinimaDeclarada: pontMin,
-      pontuacaoTotalDeclarada: pontTotal,
-      qtdCriteriosDeclarada: qtdCriterios,
-      excedenteDeclarado: excedente,
-      saldoAnterior,
-      itens,
-      rawPreview: text.slice(0, 1500),
-    };
-  }
-
-  async function extractPdfText(fileOrArrayBuffer) {
+  async function extractPdfTextStructured(fileOrArrayBuffer) {
     if (!global.pdfjsLib) throw new Error("pdf.js não carregado");
     const data =
       fileOrArrayBuffer instanceof ArrayBuffer
         ? fileOrArrayBuffer
         : await fileOrArrayBuffer.arrayBuffer();
     const pdf = await global.pdfjsLib.getDocument({ data }).promise;
-    let full = "";
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
+    const pages = [];
+    let flat = "";
+
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
       const content = await page.getTextContent();
-      const strings = content.items.map((it) => it.str);
-      full += strings.join(" ") + "\n";
+      const rows = new Map();
+      for (const it of content.items) {
+        if (!it.str || !String(it.str).trim()) continue;
+        const tr = it.transform || [1, 0, 0, 1, 0, 0];
+        const x = tr[4];
+        const y = Math.round(tr[5] * 2) / 2; // bucket Y
+        const key = y;
+        if (!rows.has(key)) rows.set(key, []);
+        rows.get(key).push({ x, str: it.str });
+      }
+      const ys = [...rows.keys()].sort((a, b) => b - a); // top to bottom
+      const lines = ys.map((y) => {
+        const parts = rows.get(y).sort((a, b) => a.x - b.x);
+        return parts.map((p) => p.str).join(" ");
+      });
+      pages.push(lines);
+      flat += lines.join("\n") + "\n";
     }
-    return full;
+    return { flat: clean(flat.replace(/\n/g, " ")), lines: pages.flat().map(clean), raw: flat };
+  }
+
+  function inferGrupo(descricao) {
+    const d = descricao.toLowerCase();
+    if (/membro de n[uú]cleos|comiss[oõ]es ou comit|conselhos superiores|defensor dativo|exame de sele/i.test(d))
+      return "I";
+    if (/projetos institucionais|capacita[cç][aã]o, f[oó]rum|forma[cç][aã]o continuada|orienta[cç][aã]o, tutoria|cooperac/i.test(d))
+      return "II";
+    if (/premia[cç][aã]o/i.test(d)) return "III";
+    if (/fiscaliza[cç][aã]o de contratos|termo de refer[eê]ncia|planejamento de contrata|licita[cç][aã]o|sistemas estruturantes|insalubridade|respons[aá]vel por setor/i.test(d))
+      return "IV";
+    if (/cargo de dire[cç][aã]o|fun[cç][aã]o gratificada|cd-0|fg-0/i.test(d)) return "V";
+    if (/patente|propriedade intelectual|transfer[eê]ncia de tecnologia|incentivo [aà] qualifica|grupo de pesquisa|capta[cç][aã]o de recursos|cap[ií]tulo de livro|congresso|difus[aã]o|coorienta|epidem|pandemia|obra art[ií]stica|material t[eé]cnico/i.test(d))
+      return "VI";
+    return null;
+  }
+
+  /**
+   * Parse de linhas do tipo:
+   * 1 Descrição ... Por designação 3,0 9,0
+   */
+  function parseItensFromFlat(flat) {
+    const itens = [];
+    // split before each "N Descrição" that ends with Por ... pts pts
+    const re =
+      /(\d{1,2})\s+((?:Participa[cç][aã]o|Exerc[ií]cio|Elabora[cç][aã]o|Atua[cç][aã]o|Apresenta[cç][aã]o|Coordena[cç][aã]o|Recebimento|Produ[cç][aã]o|Autoria|Conclus[aã]o|Desempenho|Publica[cç][aã]o|Avalia[cç][aã]o|Representa[cç][aã]o|Carta patente)[\s\S]*?)\s+(Por\s+.+?)\s+(\d{1,3}[.,]\d)\s+(\d{1,3}[.,]\d)/gi;
+
+    let m;
+    while ((m = re.exec(flat)) !== null) {
+      let desc = clean(m[2]);
+      // cut if glued next item number at end
+      desc = desc.replace(/\s+\d{1,2}\s+(Participa|Exerc|Elabora|Atua|Apresenta|Coordena|Receb|Produ|Autoria|Conclus).*$/i, "");
+      const unidade = clean(m[3]);
+      const pu = parseNumberBR(m[4]);
+      const po = parseNumberBR(m[5]);
+      if (po == null || desc.length < 25) continue;
+      // skip declaration junk
+      if (/declaro|fatos apresentados|responsabilidade administrativa/i.test(desc)) continue;
+      itens.push({
+        grupo: inferGrupo(desc),
+        n: Number(m[1]),
+        descricao: desc,
+        unidade,
+        pontosUnitario: pu,
+        pontosObtidos: po,
+        aceito: "pend",
+        obs: "",
+      });
+    }
+    return itens;
+  }
+
+  function parseHeader(flat) {
+    // Nome SIAPE Cargo data A B C D E Lotação email
+    const m = flat.match(
+      /^([A-Za-zÀ-ÿ' .\-]{5,80}?)\s+(\d{6,8})\s+([A-Za-zÀ-ÿ /]{3,60}?)\s+(\d{2}\/\d{2}\/\d{4})\s+A\s+B\s+C\s+D\s+E\s+(.+?)\s+([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i
+    );
+    if (m) {
+      return {
+        nome: clean(m[1]),
+        siape: m[2],
+        cargo: clean(m[3]),
+        dataIngresso: m[4],
+        lotacao: clean(m[5]),
+        email: m[6],
+        nivelClassificacao: "E",
+      };
+    }
+    // fallback looser
+    const siape = (flat.match(/\b(\d{6,8})\b/) || [])[1] || "";
+    const email = (flat.match(/([a-z0-9._%+-]+@uffs\.edu\.br)/i) || [])[1] || "";
+    const dataIngresso = (flat.match(/(\d{2}\/\d{2}\/\d{4})/) || [])[1] || "";
+    const nome = clean((flat.match(/^([A-Za-zÀ-ÿ' .\-]{5,80}?)\s+\d{6,8}/) || [])[1] || "");
+    return {
+      nome,
+      siape,
+      cargo: "",
+      dataIngresso,
+      lotacao: "",
+      email,
+      nivelClassificacao: "E",
+    };
+  }
+
+  function inferNivel(flat, pontTotal, qtdItens, grupos) {
+    // explicit
+    if (/n[ií]vel\s+RSC[\s\-]*PCCTAE\s*(I{1,3}|IV|V|VI)\b/i.test(flat)) {
+      return flat.match(/n[ií]vel\s+RSC[\s\-]*PCCTAE\s*(I{1,3}|IV|V|VI)\b/i)[1].toUpperCase();
+    }
+    // from totals
+    const min = parseNumberBR((flat.match(/m[ií]nima[^0-9]{0,20}(\d{1,3}(?:[.,]\d)?)/i) || [])[1]);
+    if (min === 75 || min === 75.0) return "VI";
+    if (min === 52) return "V";
+    if (min === 30) return "IV";
+    if (min === 25) return "III";
+    if (min === 15) return "II";
+    if (min === 10) return "I";
+    // infer by complexity + points
+    const g = new Set(grupos || []);
+    const p = pontTotal || 0;
+    if (g.has("VI") && p >= 75) return "VI";
+    if ((g.has("IV") || g.has("V") || g.has("VI")) && p >= 52) return "V";
+    if (p >= 75) return "VI";
+    if (p >= 52) return "V";
+    if (p >= 30) return "IV";
+    if (p >= 25) return "III";
+    if (p >= 15) return "II";
+    if (p >= 10) return "I";
+    return "";
+  }
+
+  function parseRequerimentoText(flatInput) {
+    const flat = clean(flatInput);
+    const header = parseHeader(flat);
+    const itens = parseItensFromFlat(flat);
+    const pontTotal =
+      itens.reduce((s, i) => s + (Number(i.pontosObtidos) || 0), 0) ||
+      parseNumberBR((flat.match(/totalizo\s+(\d{1,3}(?:[.,]\d)?)/i) || [])[1]);
+    const pontMin = parseNumberBR(
+      (flat.match(/m[ií]nima(?:\s+necess[aá]ria)?[^0-9]{0,15}(\d{1,3}(?:[.,]\d)?)/i) ||
+        [])[1]
+    );
+    const qtd =
+      itens.length ||
+      parseNumberBR(
+        (flat.match(/crit[eé]rios espec[ií]ficos utilizados[^0-9]{0,10}(\d{1,2})/i) ||
+          [])[1]
+      );
+    const grupos = itens.map((i) => i.grupo).filter(Boolean);
+    const nivelRsc = inferNivel(flat, pontTotal, qtd, grupos);
+    const nivelObj = global.RSCRegras && global.RSCRegras.NIVEIS[nivelRsc];
+    const minOficial = nivelObj ? nivelObj.minPontos : pontMin;
+    const excedente =
+      pontTotal != null && minOficial != null
+        ? Math.round((pontTotal - minOficial) * 10) / 10
+        : parseNumberBR((flat.match(/excedente[^0-9]{0,20}(\d{1,3}(?:[.,]\d)?)/i) || [])[1]);
+    const saldoAnterior =
+      parseNumberBR(
+        (flat.match(/saldo de pontua[cç][aã]o[^0-9]{0,25}(\d{1,3}(?:[.,]\d)?)/i) ||
+          [])[1]
+      ) || 0;
+
+    return {
+      nome: header.nome,
+      siape: header.siape,
+      cargo: header.cargo,
+      dataIngresso: header.dataIngresso,
+      nivelClassificacao: header.nivelClassificacao,
+      lotacao: header.lotacao,
+      email: header.email,
+      nivelRsc,
+      pontuacaoMinimaDeclarada: minOficial ?? pontMin,
+      pontuacaoTotalDeclarada: Math.round((pontTotal || 0) * 10) / 10,
+      qtdCriteriosDeclarada: qtd,
+      excedenteDeclarado: excedente,
+      saldoAnterior,
+      itens,
+      rawPreview: flat.slice(0, 1200),
+    };
   }
 
   async function parseRequerimentoPdf(file) {
-    const text = await extractPdfText(file);
-    const data = parseRequerimentoText(text);
-    data._textLength = text.length;
+    const structured = await extractPdfTextStructured(file);
+    // prefer joined lines with newlines for some patterns, but flat works
+    const data = parseRequerimentoText(structured.raw + "\n" + structured.flat);
+    // if header failed on flat only, try lines[0]
+    if (!data.nome && structured.lines[0]) {
+      const h2 = parseHeader(structured.lines.slice(0, 8).join(" "));
+      Object.assign(data, h2);
+    }
+    data._textLength = structured.flat.length;
     data._sourceName = file.name || "requerimento.pdf";
+    data._lineCount = structured.lines.length;
     return data;
   }
 
   global.RSCParseRequerimento = {
     parseRequerimentoPdf,
     parseRequerimentoText,
-    extractPdfText,
+    extractPdfText: async (f) => (await extractPdfTextStructured(f)).flat,
   };
 })(typeof window !== "undefined" ? window : globalThis);
