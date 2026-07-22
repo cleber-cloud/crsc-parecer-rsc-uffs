@@ -233,7 +233,7 @@
 
     text("1. Identificação", { size: 12, bold: true });
     gap(4);
-    kv("Servidor: ", (ctx.req && ctx.req.nome) || "—");
+    kv("Servidor(a): ", (ctx.req && ctx.req.nome) || "—");
     kv("Matrícula SIAPE: ", (ctx.req && ctx.req.siape) || "—");
     kv("Cargo: ", (ctx.req && ctx.req.cargo) || "—");
     kv("Lotação: ", (ctx.req && ctx.req.lotacao) || "—");
