@@ -832,7 +832,7 @@
                 <span class="chip-ico" aria-hidden="true">${
                   hasDil ? "✎" : "⚑"
                 }</span>
-                <span>${hasDil ? "Diligência" : "Diligência"}</span>
+                <span>Diligência</span>
               </button>
               <button type="button" class="chip-btn chip-obs ${
                 hasObs ? "active" : ""
