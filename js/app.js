@@ -143,10 +143,75 @@
 
   const $ = (id) => document.getElementById(id);
 
+  function closeMsgModal() {
+    const modal = $("msgModal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    document.body.classList.remove("modal-open");
+  }
+
+  /**
+   * Popup central com OK (erros e avisos que exigem leitura).
+   * Não rola a página; trava o scroll do body enquanto aberto.
+   */
+  function showMsgModal(msg, type) {
+    const modal = $("msgModal");
+    const text = $("msgModalText");
+    const title = $("msgModalTitle");
+    const icon = $("msgModalIcon");
+    if (!modal || !text) {
+      // fallback
+      window.alert(msg);
+      return;
+    }
+    const t = type || "err";
+    modal.classList.remove("msg-err", "msg-warn", "msg-info", "msg-ok");
+    modal.classList.add(
+      t === "err"
+        ? "msg-err"
+        : t === "warn"
+          ? "msg-warn"
+          : t === "ok"
+            ? "msg-ok"
+            : "msg-info"
+    );
+    if (title) {
+      title.textContent =
+        t === "err"
+          ? "Ops!"
+          : t === "warn"
+            ? "Atenção"
+            : t === "ok"
+              ? "Tudo certo"
+              : "Aviso";
+    }
+    if (icon) {
+      icon.textContent =
+        t === "err" ? "!" : t === "warn" ? "!" : t === "ok" ? "✓" : "i";
+    }
+    text.textContent = String(msg || "");
+    modal.classList.remove("hidden");
+    document.body.classList.add("modal-open");
+    const ok = $("msgModalOk");
+    if (ok) {
+      ok.focus();
+    }
+  }
+
   function toast(msg, type) {
+    const t = type || "info";
+    // erros e alertas importantes → popup central com OK
+    if (t === "err" || t === "warn") {
+      showMsgModal(msg, t);
+      return;
+    }
     const el = $("toast");
+    if (!el) {
+      showMsgModal(msg, t);
+      return;
+    }
     el.textContent = msg;
-    el.className = "alert alert-" + (type || "info");
+    el.className = "alert alert-" + t;
     el.classList.remove("hidden");
     setTimeout(() => el.classList.add("hidden"), 6500);
   }
@@ -1273,6 +1338,14 @@
   function bind() {
     fillUnidades();
     renderHipotesesDropdown();
+
+    const msgOk = $("msgModalOk");
+    if (msgOk) msgOk.addEventListener("click", closeMsgModal);
+    const msgBack = $("msgModalBackdrop");
+    if (msgBack) msgBack.addEventListener("click", closeMsgModal);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeMsgModal();
+    });
 
     $("selUnidade").addEventListener("change", (e) => {
       state.comissaoId = e.target.value;

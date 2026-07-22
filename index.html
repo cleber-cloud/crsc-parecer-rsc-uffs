@@ -35,6 +35,16 @@
 
     <div id="toast" class="alert alert-info hidden" role="status"></div>
 
+    <div id="msgModal" class="msg-modal hidden" role="dialog" aria-modal="true" aria-labelledby="msgModalTitle">
+      <div class="msg-modal-backdrop" id="msgModalBackdrop"></div>
+      <div class="msg-modal-card">
+        <div class="msg-modal-icon" id="msgModalIcon" aria-hidden="true">!</div>
+        <h4 id="msgModalTitle" class="msg-modal-title">Atenção</h4>
+        <p id="msgModalText" class="msg-modal-text"></p>
+        <button type="button" class="btn btn-primary" id="msgModalOk">OK</button>
+      </div>
+    </div>
+
     <section class="card card-tight" id="step1">
       <h3>1. Processo e unidade da CRSC</h3>
       <div class="grid-2">
