@@ -1047,13 +1047,26 @@
     const av = RSCRegras.avaliar(state.req, itensParaAvaliacao());
     state._avaliacao = av;
 
+    const minItensLabel =
+      av.minItens == null ? "—" : av.minItens === 0 ? "0*" : String(av.minItens);
+    const cx =
+      av.nivel && av.nivel.complexidade && av.nivel.complexidade.length
+        ? av.complexidadeOk
+          ? "OK"
+          : "Não"
+        : "—";
     $("metricsBox").innerHTML = `
-      <div class="metric"><div class="k">Mín. pontos</div><div class="v">${av.minPontos ?? "—"}</div></div>
+      <div class="metric"><div class="k">Mín. pontos (art. 5º)</div><div class="v">${av.minPontos ?? "—"}</div></div>
       <div class="metric"><div class="k">Pontos aceitos</div><div class="v">${av.pontosObtidos}</div></div>
-      <div class="metric"><div class="k">Mín. critérios</div><div class="v">${av.minItens ?? "—"}</div></div>
-      <div class="metric"><div class="k">Critérios com qtd &gt; 0</div><div class="v">${av.qtdCriterios}</div></div>
+      <div class="metric"><div class="k">Mín. itens (art. 5º)</div><div class="v" title="${
+        av.minItens === 0
+          ? "RSC I: o decreto exige só pontuação mínima"
+          : ""
+      }">${minItensLabel}</div></div>
+      <div class="metric"><div class="k">Itens com qtd &gt; 0</div><div class="v">${av.qtdCriterios}</div></div>
+      <div class="metric"><div class="k">Complexidade</div><div class="v" style="font-size:1rem">${cx}</div></div>
       <div class="metric"><div class="k">Saldo</div><div class="v">${av.saldoPontuacao}</div></div>
-      <div class="metric"><div class="k">Prévia</div><div class="v" style="font-size:1rem">${
+      <div class="metric"><div class="k">Prévia art. 5º</div><div class="v" style="font-size:1rem">${
         av.favoravel ? "Favorável" : "Não favorável"
       }</div></div>
     `;

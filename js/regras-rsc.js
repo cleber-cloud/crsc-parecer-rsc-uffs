@@ -5,13 +5,24 @@
 (function (global) {
   "use strict";
 
+  /**
+   * Art. 5º do Decreto nº 13.048/2026 — requisitos por nível:
+   * I  — 10 pts (sem mínimo de critérios específicos)
+   * II — 15 pts + 2 critérios
+   * III — 25 pts + 2 critérios
+   * IV — 30 pts + 3 critérios, ≥1 do art. 3º II, IV, V ou VI (Anexos II, IV, V, VI)
+   * V  — 52 pts + 5 critérios, ≥1 do art. 3º IV, V ou VI (Anexos IV, V, VI)
+   * VI — 75 pts + 7 critérios, ≥1 do art. 3º VI (Anexo VI)
+   * Percentuais: art. 5º, § 1º (IQ 10/15/25/30/52/75%).
+   * Anexos I–VI do decreto correspondem aos incisos I–VI do art. 3º.
+   */
   const NIVEIS = {
     I: {
       id: "I",
       nome: "RSC-PCCTAE I",
       percentual: 10,
       minPontos: 10,
-      minItens: 1,
+      minItens: 0,
       complexidade: null,
       complexidadeDesc: "—",
     },
@@ -40,7 +51,8 @@
       minPontos: 30,
       minItens: 3,
       complexidade: ["II", "IV", "V", "VI"],
-      complexidadeDesc: "Mínimo 1 item dos Anexos II, IV, V ou VI",
+      complexidadeDesc:
+        "Mínimo 1 item dos Anexos II, IV, V ou VI (art. 3º, II, IV, V ou VI)",
     },
     V: {
       id: "V",
@@ -49,7 +61,8 @@
       minPontos: 52,
       minItens: 5,
       complexidade: ["IV", "V", "VI"],
-      complexidadeDesc: "Mínimo 1 item dos Anexos IV, V ou VI",
+      complexidadeDesc:
+        "Mínimo 1 item dos Anexos IV, V ou VI (art. 3º, IV, V ou VI)",
     },
     VI: {
       id: "VI",
@@ -58,7 +71,7 @@
       minPontos: 75,
       minItens: 7,
       complexidade: ["VI"],
-      complexidadeDesc: "Mínimo 1 item do Anexo VI",
+      complexidadeDesc: "Mínimo 1 item do Anexo VI (art. 3º, VI)",
     },
   };
 
@@ -147,14 +160,27 @@
    *   critério conta se qtdAceita > 0
    */
   function avaliar(req, itens) {
-    const nivelId = (req.nivelRsc || "").replace(/RSC-PCCTAE\s*/i, "").trim().toUpperCase();
+    const nivelId = (req.nivelRsc || "")
+      .replace(/RSC-PCCTAE\s*/i, "")
+      .trim()
+      .toUpperCase();
     const nivel = NIVEIS[nivelId] || null;
 
-    const comPontos = (itens || []).filter((i) => (Number(i.pontosAceitos) || 0) > 0);
-    const pontos = comPontos.reduce((s, i) => s + (Number(i.pontosAceitos) || 0), 0);
+    // Critério específico conta se houver pontos aceitos (qtd aceita × pts/unid. > 0)
+    const comPontos = (itens || []).filter(
+      (i) => (Number(i.pontosAceitos) || 0) > 0
+    );
+    const pontos = comPontos.reduce(
+      (s, i) => s + (Number(i.pontosAceitos) || 0),
+      0
+    );
     const qtd = comPontos.length;
+    // Anexo do item = inciso do art. 3º (I–VI)
     const grupos = new Set(
-      comPontos.map((i) => i.grupo || grupoDoCriterio(i.descricao)).filter(Boolean)
+      comPontos
+        .map((i) => i.grupo || grupoDoCriterio(i.descricao || i.criterionId))
+        .filter(Boolean)
+        .map((g) => String(g).toUpperCase())
     );
 
     /** Sugestões automáticas de incisos do art. 14 (ids) */
@@ -162,22 +188,31 @@
     let complexidadeOk = true;
     if (nivel && nivel.complexidade && nivel.complexidade.length) {
       complexidadeOk = nivel.complexidade.some((g) => grupos.has(g));
-      if (!complexidadeOk) sugestoes.push("I"); // art. 5º requisitos
+      if (!complexidadeOk) sugestoes.push("I"); // art. 5º, caput
     }
     if (nivel) {
       if (pontos + 1e-9 < nivel.minPontos) sugestoes.push("I");
-      if (qtd < nivel.minItens) sugestoes.push("I");
+      // minItens 0 = sem exigência de quantidade (RSC I)
+      if ((nivel.minItens || 0) > 0 && qtd < nivel.minItens) sugestoes.push("I");
     }
-    // se algum item com 0 pontos por recusa documental
-    if ((itens || []).some((i) => i.aceito === "no" || (Number(i.qtdAceita) || 0) === 0 && (Number(i.qtdDeclarada) || 0) > 0)) {
+    // item declarado e zerado pela comissão → indício de comprovação (art. 14, III)
+    if (
+      (itens || []).some(
+        (i) =>
+          i.aceito === "no" ||
+          ((Number(i.qtdAceita) || 0) === 0 &&
+            (Number(i.qtdDeclarada) || 0) > 0)
+      )
+    ) {
       sugestoes.push("III");
     }
 
     const uniqueSug = [...new Set(sugestoes)];
+    const minItens = nivel ? nivel.minItens || 0 : 0;
     const favoravel =
-      nivel &&
+      !!nivel &&
       pontos + 1e-9 >= nivel.minPontos &&
-      qtd >= nivel.minItens &&
+      qtd >= minItens &&
       complexidadeOk;
 
     const saldo = nivel ? Math.max(0, pontos - nivel.minPontos) : 0;
@@ -193,7 +228,7 @@
       sugestoesArt14: uniqueSug,
       saldoPontuacao: Math.round(saldo * 10) / 10,
       minPontos: nivel ? nivel.minPontos : null,
-      minItens: nivel ? nivel.minItens : null,
+      minItens: nivel ? minItens : null,
       percentual: nivel ? nivel.percentual : null,
     };
   }

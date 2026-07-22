@@ -678,7 +678,8 @@
       .toUpperCase();
     const N = global.RSCRegras && global.RSCRegras.NIVEIS;
     if (N && N[id] && N[id].minItens != null) return N[id].minItens;
-    const FALLBACK = { I: 1, II: 2, III: 2, IV: 3, V: 5, VI: 7 };
+    // I = 0 critérios (só pontos), conforme art. 5º, I
+    const FALLBACK = { I: 0, II: 2, III: 2, IV: 3, V: 5, VI: 7 };
     return FALLBACK[id] != null ? FALLBACK[id] : null;
   }
 
