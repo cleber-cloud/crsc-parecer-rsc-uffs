@@ -1486,8 +1486,7 @@
     if (!el) return;
     const m = snapOrMeta || null;
     if (!m) {
-      el.textContent =
-        "Sessão salva automaticamente neste navegador (IndexedDB).";
+      el.textContent = "Sessão salva automaticamente neste navegador.";
       return;
     }
     const label = m.savedAtLabel || m.savedAt || "";
@@ -1504,8 +1503,7 @@
       "Sessão automática" +
       (label ? ": " + label : "") +
       (siape ? " · SIAPE " + siape : "") +
-      (proc ? " · " + proc : "") +
-      " · IndexedDB";
+      (proc ? " · Processo " + proc : "");
   }
 
   /** Sempre grava no IndexedDB (silencioso). */

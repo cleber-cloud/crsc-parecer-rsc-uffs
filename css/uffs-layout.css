@@ -38,44 +38,42 @@ a{color:var(--uffs-green)}
 .app-header h1{margin:0;font-size:1.45rem;letter-spacing:-.02em}
 .app-header p{margin:.15rem 0 0;opacity:.92;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
 
-/* Barra de sessão / backup */
-.session-bar{
-  background:#fff;
-  border-bottom:1px solid #d8e2dc;
-  box-shadow:0 4px 16px rgba(7,32,19,.05);
-  position:sticky;
-  top:0;
-  z-index:50;
-}
-.session-bar-inner{
-  max-width:1100px;
-  margin:0 auto;
-  padding:.55rem 16px;
+/* Ações no cabeçalho (backup / limpar) */
+.header-actions{
   display:flex;
   flex-wrap:wrap;
   align-items:center;
-  justify-content:space-between;
-  gap:.5rem 1rem;
+  justify-content:flex-end;
+  gap:.4rem;
 }
-.session-bar-actions{display:flex;flex-wrap:wrap;gap:.4rem}
-.btn-session{
-  background:#e8f0eb;
-  color:var(--uffs-green-darker);
-  border:0;
+.btn-header{
+  background:rgba(255,255,255,.18);
+  color:#fff;
+  border:1px solid rgba(255,255,255,.35);
   border-radius:999px;
   padding:.45rem .85rem;
-  font:700 .72rem/1 "Fira Sans","Segoe UI",Arial,sans-serif;
+  font:700 .7rem/1 "Fira Sans","Segoe UI",Arial,sans-serif;
   text-transform:uppercase;
   letter-spacing:.03em;
   cursor:pointer;
 }
-.btn-session:hover{background:#d8e8de}
-.btn-session-danger{
-  background:#fee2e2;
-  color:#991b1b;
+.btn-header:hover{background:rgba(255,255,255,.28)}
+.btn-header-danger{
+  background:rgba(254,226,226,.2);
+  border-color:rgba(254,202,202,.55);
 }
-.btn-session-danger:hover{background:#fecaca}
-.session-status{margin:0;font-size:.75rem}
+.btn-header-danger:hover{background:rgba(254,226,226,.35)}
+.session-status-wrap{
+  max-width:1100px;
+  margin:0 auto;
+  padding:0 16px .55rem;
+}
+.session-status{
+  margin:0;
+  font-size:.72rem;
+  opacity:.92;
+  color:#fff;
+}
 
 main.wrap{
   max-width:1100px;

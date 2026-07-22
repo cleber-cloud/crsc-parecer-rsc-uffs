@@ -11,28 +11,24 @@
 <body>
   <header class="app-header">
     <div class="wrap">
-      <div style="display:flex;align-items:center;gap:1rem">
+      <div style="display:flex;align-items:center;gap:1rem;min-width:0">
         <img src="./logo-ufes.png" alt="Logo" />
         <div>
           <h1>CRSC · Parecer RSC-PCCTAE</h1>
           <p>Comissão de Reconhecimento de Saberes e Competências · UFFS</p>
         </div>
       </div>
-      <div class="badge" style="background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.25)">Versão teste · GitHub Pages</div>
-    </div>
-  </header>
-
-  <div class="session-bar">
-    <div class="wrap session-bar-inner">
-      <div class="session-bar-actions">
-        <button type="button" class="btn btn-session" id="btnBackup" title="Baixa um arquivo JSON com todo o estado da sessão">Backup (arquivo)</button>
-        <button type="button" class="btn btn-session" id="btnRestoreBackup" title="Restaura a partir de um arquivo de backup JSON">Restaurar backup</button>
-        <button type="button" class="btn btn-session btn-session-danger" id="btnClearLocal" title="Apaga dados deste navegador e reinicia a tela">Limpar dados locais</button>
+      <div class="header-actions">
+        <button type="button" class="btn btn-header" id="btnBackup" title="Baixa um arquivo JSON com todo o estado da sessão">Backup</button>
+        <button type="button" class="btn btn-header" id="btnRestoreBackup" title="Restaura a partir de um arquivo de backup JSON">Restaurar backup</button>
+        <button type="button" class="btn btn-header btn-header-danger" id="btnClearLocal" title="Apaga dados deste navegador e reinicia a tela">Limpar dados locais</button>
         <input id="backupFileInput" type="file" accept="application/json,.json" class="hidden" />
       </div>
-      <p id="sessionStatus" class="session-status muted small">Sessão salva automaticamente neste navegador (IndexedDB).</p>
     </div>
-  </div>
+    <div class="wrap session-status-wrap">
+      <p id="sessionStatus" class="session-status">Sessão salva automaticamente neste navegador.</p>
+    </div>
+  </header>
 
   <main class="wrap">
     <section class="hero hero-compact">
