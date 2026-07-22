@@ -355,18 +355,17 @@
     );
     gap(14);
 
-    // 4. Assinaturas logo após o parecer (item 3) — centralizadas
+    // 4. Assinaturas: título e unidade à esquerda; nomes centralizados
     text("4. Assinaturas da CRSC-PCCTAE", {
       size: 12,
       bold: true,
-      align: "center",
     });
     gap(4);
     text(
       `Unidade: ${unidadeNome} | Designação: Portaria nº ${
         (ctx.comissao && ctx.comissao.portariaDesignacao) || "—"
       }`,
-      { size: 9, align: "center" }
+      { size: 9 }
     );
     gap(12);
 
