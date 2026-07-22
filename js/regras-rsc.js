@@ -67,7 +67,7 @@
    * Prefixo comum do caput + cada inciso.
    */
   const CAPUT_ART14 =
-    "O RSC-PCCTAE poderá ser indeferido, ainda que atendidos os requisitos estabelecidos no art. 3º, com base na verificação do atendimento dos seguintes critérios objetivos:";
+    "O RSC-PCCTAE poderá ser indeferido, ainda que atendidos os requisitos estabelecidos no art. 3º, com base na verificação do não atendimento dos seguintes critérios objetivos:";
 
   const HIPOTESES_ART14 = [
     {
