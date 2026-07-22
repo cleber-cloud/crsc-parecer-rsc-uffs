@@ -75,11 +75,14 @@
       <h3>2. PDF do Requerimento</h3>
       <div class="file-drop" id="fileDrop">
         <p><strong>Arraste o PDF</strong> ou clique para selecionar</p>
-        <p class="muted small">Arquivo gerado pela calculadora RSC-PCCTAE UFFS</p>
+        <p class="muted small">Arquivo gerado pela calculadora RSC-PCCTAE UFFS · <strong>texto nativo + OCR</strong> em todas as páginas (fusão campo a campo)</p>
         <p id="fileName" class="small" style="margin-top:.5rem"></p>
+        <div id="ocrProgress" class="muted small hidden" style="margin-top:.5rem"></div>
+        <div id="ocrBar" class="ocr-bar hidden" aria-hidden="true"><div id="ocrBarFill" class="ocr-bar-fill"></div></div>
         <input id="fileInput" type="file" accept="application/pdf,.pdf" class="hidden" />
       </div>
       <div id="identBox" class="hidden" style="margin-top:1rem"></div>
+      <div id="compareBox" class="hidden" style="margin-top:1rem"></div>
     </section>
 
     <section class="card hidden" id="step2">
@@ -151,11 +154,13 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc = "./vendor/pdf.worker.min.js";
     }
   </script>
+  <script src="./vendor/tesseract.min.js"></script>
   <script src="./vendor/pdf-lib.min.js"></script>
   <script src="./vendor/fontkit.umd.min.js"></script>
   <script src="./js/comissoes-data.js"></script>
   <script src="./js/comissoes.js"></script>
   <script src="./js/regras-rsc.js"></script>
+  <script src="./js/ocr-pdf.js"></script>
   <script src="./js/parse-requerimento.js"></script>
   <script src="./js/parecer-pdf.js"></script>
   <script src="./js/app.js"></script>

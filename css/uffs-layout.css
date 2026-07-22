@@ -217,6 +217,81 @@ footer.app-footer a{color:#fff}
   border:1px solid #d8e2dc;border-radius:12px;padding:.65rem .75rem;background:#fafcfb;
 }
 .hipoteses-panel.hidden{display:none!important}
+
+/* Progresso OCR dual-capture */
+.ocr-bar{
+  margin-top:.55rem;
+  height:8px;
+  background:#e2ebe6;
+  border-radius:999px;
+  overflow:hidden;
+}
+.ocr-bar-fill{
+  height:100%;
+  width:0%;
+  background:linear-gradient(90deg,var(--uffs-green),#0b833d);
+  border-radius:999px;
+  transition:width .25s ease;
+}
+
+/* Comparação texto × OCR */
+.compare-panel{
+  border:1px solid #d0e6d7;
+  border-radius:12px;
+  padding:.75rem 1rem;
+  background:#f7fbf8;
+}
+.compare-panel summary{
+  cursor:pointer;
+  list-style:none;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:.25rem .5rem;
+}
+.compare-panel summary::-webkit-details-marker{display:none}
+.compare-panel summary::before{
+  content:"▸";
+  color:var(--uffs-green);
+  font-weight:700;
+  margin-right:.35rem;
+}
+.compare-panel[open] summary::before{content:"▾"}
+table.compare-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:.82rem;
+}
+table.compare-table th,
+table.compare-table td{
+  border:1px solid #d8e2dc;
+  padding:.45rem .55rem;
+  vertical-align:top;
+  text-align:left;
+}
+table.compare-table th{
+  background:var(--uffs-green-soft);
+  font-size:.7rem;
+  text-transform:uppercase;
+  letter-spacing:.03em;
+}
+table.compare-table tr.row-agree{background:#f0faf3}
+table.compare-table tr.row-conflict{background:#fffbeb}
+.src-badge{
+  display:inline-block;
+  padding:.1rem .45rem;
+  border-radius:999px;
+  font-size:.68rem;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.03em;
+  white-space:nowrap;
+}
+.src-both{background:#c6f0d4;color:#065228}
+.src-text{background:#dbeafe;color:#1e3a8a}
+.src-ocr{background:#fde68a;color:#78350f}
+.src-derived{background:#e9d5ff;color:#5b21b6}
+.src-none{background:#e5e7eb;color:#4b5563}
 .hip-item{align-items:flex-start;margin-bottom:.4rem}
 .hip-item span{line-height:1.35}
 table.checklist .num{text-align:right;white-space:nowrap}

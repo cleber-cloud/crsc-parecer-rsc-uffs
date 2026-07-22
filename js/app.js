@@ -216,6 +216,121 @@
     }
   }
 
+  function srcBadge(src, agree) {
+    if (agree || src === "both")
+      return '<span class="src-badge src-both" title="Texto e OCR concordam">✓ texto+OCR</span>';
+    if (src === "text")
+      return '<span class="src-badge src-text" title="Priorizado texto nativo">texto</span>';
+    if (src === "ocr")
+      return '<span class="src-badge src-ocr" title="Priorizado OCR">OCR</span>';
+    if (src === "pont-min" || src === "total-excedente" || src === "itens-sum")
+      return `<span class="src-badge src-derived" title="Derivado">${esc(src)}</span>`;
+    return '<span class="src-badge src-none">—</span>';
+  }
+
+  function renderCompare() {
+    const box = $("compareBox");
+    if (!box) return;
+    const r = state.req;
+    if (!r || !r._fields) {
+      box.classList.add("hidden");
+      return;
+    }
+    const m = r._merge || {};
+    const dual = r._dualCapture || {};
+    const labels = {
+      nome: "Nome",
+      siape: "SIAPE",
+      cargo: "Cargo",
+      dataIngresso: "Ingresso",
+      lotacao: "Lotação",
+      email: "E-mail",
+      nivelRsc: "Nível RSC",
+      nivelClassificacao: "Classificação",
+      pontuacaoMinimaDeclarada: "Pts mínimos",
+      pontuacaoTotalDeclarada: "Pts totais",
+      qtdCriteriosDeclarada: "Qtd critérios",
+      saldoAnterior: "Saldo anterior",
+    };
+    const order = [
+      "nome",
+      "siape",
+      "cargo",
+      "dataIngresso",
+      "lotacao",
+      "email",
+      "nivelRsc",
+      "pontuacaoMinimaDeclarada",
+      "pontuacaoTotalDeclarada",
+      "qtdCriteriosDeclarada",
+    ];
+    const rows = order
+      .filter((k) => r._fields[k])
+      .map((k) => {
+        const f = r._fields[k];
+        const conflict = f.conflict
+          ? ' class="row-conflict"'
+          : f.agree
+            ? ' class="row-agree"'
+            : "";
+        const fmt = (v) =>
+          v == null || v === "" ? "—" : esc(String(v));
+        return `<tr${conflict}>
+          <td>${esc(labels[k] || k)}</td>
+          <td class="small">${fmt(f.text)}</td>
+          <td class="small">${fmt(f.ocr)}</td>
+          <td><strong>${fmt(f.value)}</strong></td>
+          <td>${srcBadge(f.source, f.agree)}</td>
+        </tr>`;
+      })
+      .join("");
+
+    const conf =
+      m.ocrConfidence != null ? Math.round(m.ocrConfidence) + "%" : "—";
+    const ocrNote = r._ocrError
+      ? `<span class="alert-err" style="display:inline;padding:.1rem .4rem;border-radius:4px">OCR falhou: ${esc(
+          r._ocrError
+        )} — usando texto nativo</span>`
+      : `confiança OCR ~${conf} · ${m.ocrLines || dual.ocrLines || 0} linhas OCR · ${
+          m.textLines || dual.textLines || 0
+        } linhas texto`;
+
+    box.classList.remove("hidden");
+    box.innerHTML = `
+      <details class="compare-panel" open>
+        <summary>
+          <strong>Comparação texto nativo × OCR</strong>
+          <span class="muted small" style="margin-left:.5rem">
+            scores texto ${m.scoreText ?? "—"} / OCR ${m.scoreOcr ?? "—"} ·
+            ${m.fieldsAgree ?? 0} campos em acordo ·
+            ${m.fieldsConflict ?? 0} conflito(s) ·
+            itens: ${esc(m.itensStrategy || "—")}
+          </span>
+        </summary>
+        <p class="muted small" style="margin:.5rem 0">${ocrNote}</p>
+        <div class="table-wrap">
+          <table class="compare-table">
+            <thead>
+              <tr>
+                <th>Campo</th>
+                <th>Texto nativo</th>
+                <th>OCR</th>
+                <th>Resultado</th>
+                <th>Fonte</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <p class="muted small" style="margin:.6rem 0 0">
+          Itens: <strong>${(r._textOnly && r._textOnly.itens && r._textOnly.itens.length) || 0}</strong> (texto) ·
+          <strong>${(r._ocrOnly && r._ocrOnly.itens && r._ocrOnly.itens.length) || 0}</strong> (OCR) ·
+          <strong>${(r.itens && r.itens.length) || 0}</strong> (fusão).
+          Linhas amarelas = discórdia resolvida; verdes = acordo.
+        </p>
+      </details>`;
+  }
+
   function renderIdent() {
     const r = state.req;
     if (!r) return;
@@ -254,6 +369,7 @@
         updateAvaliacao();
       });
     }
+    renderCompare();
   }
 
   function pontosItem(it) {
@@ -374,12 +490,64 @@
     $("btnParecer").disabled = false;
   }
 
+  function setProgress(p) {
+    const prog = $("ocrProgress");
+    const bar = $("ocrBar");
+    const fill = $("ocrBarFill");
+    if (!prog) return;
+    prog.classList.remove("hidden");
+    if (bar) bar.classList.remove("hidden");
+    if (!p) {
+      prog.textContent = "";
+      if (fill) fill.style.width = "0%";
+      return;
+    }
+    const pct =
+      p.progress != null ? Math.max(0, Math.min(100, Math.round(p.progress * 100))) : null;
+    if (fill && pct != null) fill.style.width = pct + "%";
+
+    if (p.phase === "text") {
+      prog.textContent = "Extraindo texto nativo (pdf.js)…";
+    } else if (p.phase === "text-done") {
+      prog.textContent = `Texto nativo ok (${p.numPages || "?"} pág.). Preparando OCR…`;
+    } else if (p.phase === "ocr-init") {
+      prog.textContent =
+        "Carregando motor OCR (Tesseract por+eng)" +
+        (p.status ? " · " + p.status : "") +
+        "…";
+    } else if (p.phase === "ocr" || p.phase === "ocr-page") {
+      const pg = p.page || "?";
+      const tot = p.total || "?";
+      prog.textContent = `OCR em todas as páginas · ${pg}/${tot}${
+        pct != null ? " · " + pct + "%" : ""
+      }`;
+    } else if (p.phase === "merge") {
+      prog.textContent = "Cruzando texto nativo × OCR (campo a campo)…";
+    } else if (p.phase === "done") {
+      prog.textContent = "Fusão concluída.";
+      if (fill) fill.style.width = "100%";
+    }
+  }
+
   async function onFile(file) {
     if (!file) return;
     $("fileName").textContent = file.name;
+    const prog = $("ocrProgress");
+    const compare = $("compareBox");
+    if (compare) {
+      compare.classList.add("hidden");
+      compare.innerHTML = "";
+    }
+    setProgress({ phase: "text", progress: 0.02 });
     try {
-      toast("Lendo PDF do requerimento…", "info");
-      const data = await RSCParseRequerimento.parseRequerimentoPdf(file);
+      toast(
+        "Lendo PDF com captura dual (texto nativo + OCR em todas as páginas)… pode levar alguns minutos.",
+        "info"
+      );
+      const data = await RSCParseRequerimento.parseRequerimentoPdf(file, {
+        useOcr: true,
+        onProgress: setProgress,
+      });
       state.req = data;
       state.hipotesesSelecionadas = [];
       renderIdent();
@@ -389,12 +557,38 @@
       $("step3").classList.remove("hidden");
       updateAvaliacao();
       checkImpedimento();
-      toast(
-        `Extraídos ${data.itens.length} critério(s). Ajuste as quantidades aceitas se negar parte dos comprovantes.`,
-        "ok"
-      );
+      const m = data._merge || {};
+      const miss = [];
+      if (!data.nome) miss.push("nome");
+      if (!data.siape) miss.push("SIAPE");
+      if (!data.nivelRsc) miss.push("nível");
+      if (!data.itens.length) miss.push("itens");
+      prog.textContent =
+        `Pronto · ${data.itens.length} critério(s) · fusão ${m.winner || "text/ocr"}` +
+        (m.ocrConfidence != null
+          ? ` · OCR ~${Math.round(m.ocrConfidence)}%`
+          : "") +
+        (m.fieldsConflict
+          ? ` · ${m.fieldsConflict} campo(s) com discórdia resolvida`
+          : "");
+      if (miss.length) {
+        toast(
+          `Extração parcial — confira: ${miss.join(", ")}. ${data.itens.length} critério(s).`,
+          "err"
+        );
+      } else {
+        toast(
+          `Alta precisão: ${data.itens.length} critério(s), nível RSC ${data.nivelRsc}, SIAPE ${data.siape}. Revise a tabela texto×OCR se quiser.`,
+          "ok"
+        );
+      }
     } catch (e) {
       console.error(e);
+      setProgress(null);
+      prog.textContent = "";
+      prog.classList.add("hidden");
+      const bar = $("ocrBar");
+      if (bar) bar.classList.add("hidden");
       toast(e.message || "Falha ao ler PDF", "err");
     }
   }

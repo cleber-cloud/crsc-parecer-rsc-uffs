@@ -705,20 +705,671 @@
     throw new Error("Tipo de arquivo PDF não suportado");
   }
 
-  async function parseRequerimentoPdf(file) {
+  function scoreParse(d) {
+    if (!d) return -1;
+    let s = 0;
+    if (d.nome && d.nome.length > 4 && !/\d{5,}/.test(d.nome)) s += 3;
+    if (/^\d{6,8}$/.test(String(d.siape || ""))) s += 5;
+    if (d.cargo && d.cargo.length > 2 && !/^Nome/i.test(d.cargo)) s += 2;
+    if (d.lotacao && d.lotacao.length > 2) s += 2;
+    if (d.email && /@/.test(d.email) && !/\s/.test(d.email)) s += 3;
+    if (d.dataIngresso && /\d{2}\/\d{2}\/\d{4}/.test(d.dataIngresso)) s += 2;
+    if (d.nivelRsc && /^(I{1,3}|IV|V|VI)$/i.test(d.nivelRsc)) s += 4;
+    if (d.pontuacaoMinimaDeclarada != null) s += 3;
+    if (d.pontuacaoTotalDeclarada != null) s += 2;
+    const itens = d.itens || [];
+    s += Math.min(itens.length, 20);
+    const sum = itens.reduce((a, i) => a + (Number(i.pontosObtidos) || 0), 0);
+    if (d.pontuacaoTotalDeclarada != null && itens.length) {
+      const diff = Math.abs(sum - d.pontuacaoTotalDeclarada);
+      if (diff < 0.2) s += 12;
+      else if (diff < 2) s += 6;
+      else if (diff < 10) s += 2;
+      else s -= 4;
+    } else if (sum > 0) s += 2;
+    const gok = itens.filter((i) => i.grupo).length;
+    s += Math.min(gok, 12);
+    // unidades completas
+    s += Math.min(
+      itens.filter((i) => /Por\s+/i.test(i.unidade || "")).length,
+      8
+    );
+    return s;
+  }
+
+  /**
+   * Escolhe melhor valor entre texto nativo (a) e OCR (b).
+   * Retorna { value, source, agree }.
+   */
+  function pickFieldDetail(a, b, kind) {
+    const va = a == null || a === "" ? "" : String(a).trim();
+    const vb = b == null || b === "" ? "" : String(b).trim();
+    const empty = { value: "", source: "none", agree: true };
+
+    if (!va && !vb) return empty;
+    if (!va && vb) return { value: vb, source: "ocr", agree: false };
+    if (va && !vb) return { value: va, source: "text", agree: false };
+
+    const norm = (x) =>
+      clean(x)
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+    const same =
+      norm(va) === norm(vb) ||
+      (kind === "email" &&
+        norm(va).replace(/\s/g, "") === norm(vb).replace(/\s/g, "")) ||
+      (kind === "number" &&
+        Math.abs((parseNumberBR(va) || 0) - (parseNumberBR(vb) || 0)) < 0.05);
+
+    if (same) {
+      // preferir texto nativo quando iguais (mais fiel a acentos)
+      return { value: va || vb, source: "both", agree: true };
+    }
+
+    if (kind === "siape") {
+      const okA = /^\d{6,8}$/.test(va);
+      const okB = /^\d{6,8}$/.test(vb);
+      if (okA && !okB) return { value: va, source: "text", agree: false };
+      if (okB && !okA) return { value: vb, source: "ocr", agree: false };
+      return { value: va, source: "text", agree: false };
+    }
+    if (kind === "email") {
+      const score = (e) => {
+        let s = 0;
+        if (/@/.test(e)) s += 2;
+        if (!/\s/.test(e)) s += 2;
+        if (/@uffs\.edu\.br$/i.test(e)) s += 3;
+        if (/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(e)) s += 2;
+        return s;
+      };
+      const sa = score(va);
+      const sb = score(vb);
+      if (sb > sa) return { value: vb, source: "ocr", agree: false };
+      return { value: va, source: "text", agree: false };
+    }
+    if (kind === "nome") {
+      // rejeitar se parece lixo OCR (muitos dígitos / muito curto)
+      const quality = (n) => {
+        let s = n.length;
+        if (/\d{4,}/.test(n)) s -= 20;
+        if (/^nome/i.test(n)) s -= 30;
+        if ((n.match(/[A-Za-zÀ-ÿ]/g) || []).length < 5) s -= 15;
+        // preferir nome com sobrenome
+        s += (n.trim().split(/\s+/).length - 1) * 3;
+        return s;
+      };
+      if (quality(vb) > quality(va) + 2)
+        return { value: vb, source: "ocr", agree: false };
+      return { value: va, source: "text", agree: false };
+    }
+    if (kind === "date") {
+      const ok = (d) => /^\d{2}\/\d{2}\/\d{4}$/.test(d);
+      if (ok(va) && !ok(vb)) return { value: va, source: "text", agree: false };
+      if (ok(vb) && !ok(va)) return { value: vb, source: "ocr", agree: false };
+      return { value: va, source: "text", agree: false };
+    }
+    if (kind === "nivel") {
+      const ok = (n) => /^(I{1,3}|IV|V|VI)$/i.test(n);
+      if (ok(va) && !ok(vb)) return { value: va.toUpperCase(), source: "text", agree: false };
+      if (ok(vb) && !ok(va)) return { value: vb.toUpperCase(), source: "ocr", agree: false };
+      // ambos ok mas discordam — resolver depois com pontuação mínima
+      return { value: va.toUpperCase(), source: "text", agree: false, conflict: true, alt: vb.toUpperCase() };
+    }
+    if (kind === "number") {
+      const na = parseNumberBR(va);
+      const nb = parseNumberBR(vb);
+      if (na != null && nb == null)
+        return { value: na, source: "text", agree: false };
+      if (nb != null && na == null)
+        return { value: nb, source: "ocr", agree: false };
+      // ambos: preferir texto (números nativos costumam ser exatos)
+      return { value: na, source: "text", agree: false, conflict: true, alt: nb };
+    }
+    if (kind === "lotacao" || kind === "cargo") {
+      if (vb.length > va.length + 8 && !/\d{5,}/.test(vb))
+        return { value: vb, source: "ocr", agree: false };
+      return { value: va, source: "text", agree: false };
+    }
+    return { value: va, source: "text", agree: false };
+  }
+
+  function pickField(a, b, kind) {
+    return pickFieldDetail(a, b, kind).value;
+  }
+
+  function itemKey(it) {
+    const desc = clean(it.descricao || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .slice(0, 55);
+    const po = Number(it.pontosObtidos);
+    const pu = Number(it.pontosUnitario);
+    return (
+      (it.grupo || "?") +
+      "|" +
+      (Number.isFinite(po) ? po : "?") +
+      "|" +
+      (Number.isFinite(pu) ? pu : "?") +
+      "|" +
+      desc
+    );
+  }
+
+  function listScore(list, declaredTotal) {
+    if (!list || !list.length) return -1;
+    let s = list.length * 2;
+    const sum = list.reduce((x, i) => x + (Number(i.pontosObtidos) || 0), 0);
+    if (declaredTotal != null) {
+      const d = Math.abs(sum - declaredTotal);
+      if (d < 0.2) s += 25;
+      else if (d < 2) s += 12;
+      else if (d < 15) s += 3;
+      else s -= 8;
+    }
+    s += list.filter((i) => i.grupo).length;
+    s += list.filter((i) => (i.descricao || "").length > 40).length;
+    s += list.filter((i) => /Por\s+/i.test(i.unidade || "")).length;
+    // penalizar descrições lixo
+    s -= list.filter((i) => /declaro|fatos apresentados/i.test(i.descricao || "")).length * 5;
+    return s;
+  }
+
+  function mergeItens(aList, bList, declaredTotal) {
+    const a = aList || [];
+    const b = bList || [];
+    const sa = listScore(a, declaredTotal);
+    const sb = listScore(b, declaredTotal);
+    let best;
+    let strategy;
+
+    if (!a.length && b.length) {
+      best = b;
+      strategy = "ocr-only";
+    } else if (a.length && !b.length) {
+      best = a;
+      strategy = "text-only";
+    } else if (a.length >= 3 && b.length >= 3) {
+      // união por chave semântica (grupo + pts + início descrição)
+      const map = new Map();
+      function add(it, src) {
+        const key = itemKey(it);
+        const prev = map.get(key);
+        if (!prev) {
+          map.set(key, { ...it, _src: src });
+          return;
+        }
+        // manter descrição mais completa e unidade melhor
+        const next = { ...prev };
+        if ((it.descricao || "").length > (prev.descricao || "").length) {
+          next.descricao = it.descricao;
+          next.grupo = it.grupo || prev.grupo;
+        }
+        if (
+          (it.unidade || "").length > (prev.unidade || "").length ||
+          (/seis meses/i.test(it.unidade || "") &&
+            !/seis meses/i.test(prev.unidade || ""))
+        ) {
+          next.unidade = it.unidade;
+        }
+        if (!next.grupo && it.grupo) next.grupo = it.grupo;
+        next._src = "both";
+        map.set(key, next);
+      }
+      a.forEach((it) => add(it, "text"));
+      b.forEach((it) => add(it, "ocr"));
+      const merged = [...map.values()].map(({ _src, ...rest }) => rest);
+      const sm = listScore(merged, declaredTotal);
+      // se merge inflou demais ou piorou score, usa melhor lista isolada
+      if (
+        merged.length > Math.max(a.length, b.length) + 2 ||
+        sm < Math.max(sa, sb) - 5
+      ) {
+        best = sa >= sb ? a : b;
+        strategy = sa >= sb ? "text-better" : "ocr-better";
+      } else {
+        best = merged;
+        strategy = "union";
+      }
+    } else {
+      best = sa >= sb ? a : b;
+      strategy = sa >= sb ? "text-better" : "ocr-better";
+    }
+
+    return {
+      itens: best.map((it) => {
+        let qtd =
+          it.qtdDeclarada != null
+            ? it.qtdDeclarada
+            : it.pontosUnitario
+              ? Math.round(
+                  (Number(it.pontosObtidos) / Number(it.pontosUnitario)) * 1000
+                ) / 1000
+              : null;
+        if (qtd != null && Math.abs(qtd - Math.round(qtd)) < 1e-6)
+          qtd = Math.round(qtd);
+        return {
+          ...it,
+          grupo: it.grupo || inferGrupo(it.descricao || ""),
+          qtdDeclarada: qtd,
+          qtdAceita: it.qtdAceita != null ? it.qtdAceita : qtd,
+        };
+      }),
+      strategy,
+      scoreText: sa,
+      scoreOcr: sb,
+    };
+  }
+
+  const MIN_MAP = { 10: "I", 15: "II", 25: "III", 30: "IV", 52: "V", 75: "VI" };
+
+  /**
+   * Cruza parse por texto nativo + OCR com rastreio campo a campo.
+   */
+  function mergeParses(textData, ocrData, meta) {
+    const t = textData || parseRequerimentoFromLines([]);
+    const o = ocrData || parseRequerimentoFromLines([]);
+    const st = scoreParse(t);
+    const so = scoreParse(o);
+
+    const fields = {};
+    function take(key, kind, ta, oa) {
+      const d = pickFieldDetail(ta, oa, kind);
+      fields[key] = {
+        value: d.value,
+        text: ta == null || ta === "" ? null : ta,
+        ocr: oa == null || oa === "" ? null : oa,
+        source: d.source,
+        agree: d.agree,
+        conflict: !!d.conflict,
+        alt: d.alt,
+      };
+      return d.value;
+    }
+
+    // totais numéricos com preferência pelo que fecha com soma de itens
+    const sumT = (t.itens || []).reduce(
+      (s, i) => s + (Number(i.pontosObtidos) || 0),
+      0
+    );
+    const sumO = (o.itens || []).reduce(
+      (s, i) => s + (Number(i.pontosObtidos) || 0),
+      0
+    );
+
+    function pickNumber(key, tv, ov, preferNear) {
+      const hasT = tv != null && Number.isFinite(Number(tv));
+      const hasO = ov != null && Number.isFinite(Number(ov));
+      if (!hasT && !hasO) {
+        fields[key] = {
+          value: null,
+          text: null,
+          ocr: null,
+          source: "none",
+          agree: true,
+        };
+        return null;
+      }
+      if (hasT && !hasO) {
+        fields[key] = {
+          value: tv,
+          text: tv,
+          ocr: null,
+          source: "text",
+          agree: false,
+        };
+        return tv;
+      }
+      if (!hasT && hasO) {
+        fields[key] = {
+          value: ov,
+          text: null,
+          ocr: ov,
+          source: "ocr",
+          agree: false,
+        };
+        return ov;
+      }
+      const agree = Math.abs(Number(tv) - Number(ov)) < 0.15;
+      if (agree) {
+        fields[key] = {
+          value: tv,
+          text: tv,
+          ocr: ov,
+          source: "both",
+          agree: true,
+        };
+        return tv;
+      }
+      // discorda: preferir o mais próximo de preferNear (soma itens)
+      let chosen = tv;
+      let src = "text";
+      if (preferNear != null) {
+        const dt = Math.abs(Number(tv) - preferNear);
+        const dO = Math.abs(Number(ov) - preferNear);
+        if (dO + 0.05 < dt) {
+          chosen = ov;
+          src = "ocr";
+        }
+      }
+      fields[key] = {
+        value: chosen,
+        text: tv,
+        ocr: ov,
+        source: src,
+        agree: false,
+        conflict: true,
+      };
+      return chosen;
+    }
+
+    // pré-total para orientar itens
+    let declaredHint =
+      t.pontuacaoTotalDeclarada != null
+        ? t.pontuacaoTotalDeclarada
+        : o.pontuacaoTotalDeclarada;
+    if (
+      t.pontuacaoTotalDeclarada != null &&
+      o.pontuacaoTotalDeclarada != null
+    ) {
+      // se um fecha com a soma da própria lista, usar
+      if (Math.abs(sumT - t.pontuacaoTotalDeclarada) < 0.3)
+        declaredHint = t.pontuacaoTotalDeclarada;
+      else if (Math.abs(sumO - o.pontuacaoTotalDeclarada) < 0.3)
+        declaredHint = o.pontuacaoTotalDeclarada;
+    }
+
+    const itensMerge = mergeItens(t.itens, o.itens, declaredHint);
+    const sumMerged =
+      Math.round(
+        itensMerge.itens.reduce(
+          (s, i) => s + (Number(i.pontosObtidos) || 0),
+          0
+        ) * 10
+      ) / 10;
+
+    const merged = {
+      nome: take("nome", "nome", t.nome, o.nome),
+      siape: take("siape", "siape", t.siape, o.siape),
+      cargo: take("cargo", "cargo", t.cargo, o.cargo),
+      dataIngresso: take(
+        "dataIngresso",
+        "date",
+        t.dataIngresso,
+        o.dataIngresso
+      ),
+      nivelClassificacao:
+        take(
+          "nivelClassificacao",
+          "nivel",
+          t.nivelClassificacao,
+          o.nivelClassificacao
+        ) || "E",
+      lotacao: take("lotacao", "lotacao", t.lotacao, o.lotacao),
+      email: take("email", "email", t.email, o.email),
+      nivelRsc: "",
+      pontuacaoMinimaDeclarada: pickNumber(
+        "pontuacaoMinimaDeclarada",
+        t.pontuacaoMinimaDeclarada,
+        o.pontuacaoMinimaDeclarada,
+        null
+      ),
+      pontuacaoTotalDeclarada: pickNumber(
+        "pontuacaoTotalDeclarada",
+        t.pontuacaoTotalDeclarada,
+        o.pontuacaoTotalDeclarada,
+        sumMerged || Math.max(sumT, sumO)
+      ),
+      qtdCriteriosDeclarada: pickNumber(
+        "qtdCriteriosDeclarada",
+        t.qtdCriteriosDeclarada,
+        o.qtdCriteriosDeclarada,
+        itensMerge.itens.length
+      ),
+      excedenteDeclarado: null,
+      saldoAnterior: pickNumber(
+        "saldoAnterior",
+        t.saldoAnterior,
+        o.saldoAnterior,
+        0
+      ),
+      itens: itensMerge.itens,
+      rawPreview:
+        (t.rawPreview || "").slice(0, 800) +
+        "\n---OCR---\n" +
+        (o.rawPreview || "").slice(0, 800),
+    };
+
+    if (merged.pontuacaoTotalDeclarada == null && sumMerged > 0) {
+      merged.pontuacaoTotalDeclarada = sumMerged;
+      fields.pontuacaoTotalDeclarada = {
+        value: sumMerged,
+        text: t.pontuacaoTotalDeclarada,
+        ocr: o.pontuacaoTotalDeclarada,
+        source: "itens-sum",
+        agree: false,
+      };
+    }
+
+    // Nível RSC: prioridade
+    // 1) pontuação mínima (mais confiável quando presente)
+    // 2) acordo texto+OCR
+    // 3) texto se score maior
+    // 4) OCR
+    const nivelDetail = pickFieldDetail(t.nivelRsc, o.nivelRsc, "nivel");
+    let nivel = nivelDetail.value || "";
+    let nivelSrc = nivelDetail.source;
+    if (merged.pontuacaoMinimaDeclarada != null) {
+      const byMin = MIN_MAP[Math.round(merged.pontuacaoMinimaDeclarada)];
+      if (byMin) {
+        // se min diz V e algum parse disse VI (caso Jocelaine), confiar no min
+        if (!nivel || nivel !== byMin) {
+          nivel = byMin;
+          nivelSrc = "pont-min";
+        } else {
+          nivelSrc = fields.pontuacaoMinimaDeclarada?.source || "pont-min";
+        }
+      }
+    }
+    // se ainda vazio, tentar inferir de novo no texto combinado
+    if (!nivel) {
+      nivel = t.nivelRsc || o.nivelRsc || "";
+      nivelSrc = t.nivelRsc ? "text" : o.nivelRsc ? "ocr" : "none";
+    }
+    // se conflito V/VI e total-excedente implica min
+    if (
+      nivelDetail.conflict &&
+      merged.pontuacaoTotalDeclarada != null &&
+      (t.excedenteDeclarado != null || o.excedenteDeclarado != null)
+    ) {
+      const exc =
+        t.excedenteDeclarado != null
+          ? t.excedenteDeclarado
+          : o.excedenteDeclarado;
+      const implied = Math.round(merged.pontuacaoTotalDeclarada - exc);
+      if (MIN_MAP[implied]) {
+        nivel = MIN_MAP[implied];
+        nivelSrc = "total-excedente";
+      }
+    }
+    merged.nivelRsc = String(nivel || "").toUpperCase();
+    fields.nivelRsc = {
+      value: merged.nivelRsc,
+      text: t.nivelRsc || null,
+      ocr: o.nivelRsc || null,
+      source: nivelSrc,
+      agree:
+        !!t.nivelRsc &&
+        !!o.nivelRsc &&
+        String(t.nivelRsc).toUpperCase() === String(o.nivelRsc).toUpperCase(),
+      conflict: !!nivelDetail.conflict && nivelSrc !== "pont-min",
+    };
+
+    // completar min a partir do nível se ainda faltar
+    if (merged.pontuacaoMinimaDeclarada == null && merged.nivelRsc) {
+      const nv = global.RSCRegras && global.RSCRegras.NIVEIS[merged.nivelRsc];
+      if (nv) merged.pontuacaoMinimaDeclarada = nv.minPontos;
+    }
+
+    if (merged.qtdCriteriosDeclarada == null) {
+      merged.qtdCriteriosDeclarada = merged.itens.length;
+    }
+    if (
+      merged.pontuacaoTotalDeclarada != null &&
+      merged.pontuacaoMinimaDeclarada != null
+    ) {
+      merged.excedenteDeclarado =
+        Math.round(
+          (merged.pontuacaoTotalDeclarada - merged.pontuacaoMinimaDeclarada) *
+            10
+        ) / 10;
+    } else {
+      merged.excedenteDeclarado =
+        t.excedenteDeclarado != null
+          ? t.excedenteDeclarado
+          : o.excedenteDeclarado;
+    }
+
+    // contagem de acordo entre fontes
+    const fieldKeys = Object.keys(fields);
+    const agreeN = fieldKeys.filter((k) => fields[k].agree).length;
+    const conflictN = fieldKeys.filter((k) => fields[k].conflict).length;
+    const filledFromOcr = fieldKeys.filter(
+      (k) => fields[k].source === "ocr"
+    ).length;
+
+    merged._fields = fields;
+    merged._merge = {
+      scoreText: st,
+      scoreOcr: so,
+      winner: st >= so ? "text+ocr-fill" : "ocr+text-fill",
+      itensStrategy: itensMerge.strategy,
+      itensScoreText: itensMerge.scoreText,
+      itensScoreOcr: itensMerge.scoreOcr,
+      ocrConfidence: meta && meta.ocrConfidence,
+      textLines: meta && meta.textLines,
+      ocrLines: meta && meta.ocrLines,
+      fieldsAgree: agreeN,
+      fieldsConflict: conflictN,
+      fieldsFromOcr: filledFromOcr,
+      fieldCount: fieldKeys.length,
+    };
+    return merged;
+  }
+
+  /**
+   * Normaliza linhas vindas do OCR antes do mesmo parser de texto.
+   */
+  function prepareOcrLines(lines, rawText) {
+    const normFn =
+      global.RSCOCR && global.RSCOCR.normalizeOcrText
+        ? global.RSCOCR.normalizeOcrText
+        : (s) => s;
+    const cleaned = (lines || [])
+      .map((l) => normalizeLine(normFn(l)))
+      .filter(Boolean);
+    const raw = normFn(rawText || cleaned.join(" "));
+    return { lines: cleaned, raw };
+  }
+
+  /**
+   * @param {File|Blob|ArrayBuffer} file
+   * @param {{onProgress?: function, useOcr?: boolean}} options
+   */
+  async function parseRequerimentoPdf(file, options) {
+    const opts = options || {};
+    const useOcr = opts.useOcr !== false; // default ON
+    const onProgress = opts.onProgress || null;
+
     const ab = await toArrayBuffer(file);
-    const { lines, rawJoin, numPages } = await extractPdfLines(ab);
-    const data = parseRequerimentoFromLines(lines, rawJoin);
+    // cópias independentes: pdf.js pode transferir/detach o buffer
+    const abText = ab.slice(0);
+    const abOcr = ab.slice(0);
+
+    if (onProgress) onProgress({ phase: "text", progress: 0.05 });
+
+    const { lines, rawJoin, numPages } = await extractPdfLines(abText);
+    const textData = parseRequerimentoFromLines(lines, rawJoin);
+    if (onProgress)
+      onProgress({ phase: "text-done", progress: 0.2, numPages });
+
+    let ocrData = parseRequerimentoFromLines([]);
+    let ocrMeta = { confidence: 0, lines: 0, error: null };
+    if (useOcr && global.RSCOCR) {
+      try {
+        const ocr = await global.RSCOCR.ocrPdfArrayBuffer(abOcr, (p) => {
+          if (!onProgress) return;
+          if (p.phase === "ocr-init") {
+            onProgress({
+              phase: "ocr-init",
+              status: p.status,
+              progress: 0.2 + 0.05 * (p.progress || 0),
+            });
+            return;
+          }
+          const page = p.page || 1;
+          const total = p.total || numPages || 1;
+          const pageProg =
+            p.progress != null ? p.progress : (page - 1) / total;
+          onProgress({
+            phase: "ocr",
+            page,
+            total,
+            progress: 0.25 + 0.7 * pageProg,
+          });
+        });
+        const prepared = prepareOcrLines(ocr.lines, ocr.text);
+        ocrData = parseRequerimentoFromLines(prepared.lines, prepared.raw);
+        ocrMeta = {
+          confidence: ocr.confidence,
+          lines: prepared.lines.length,
+          error: null,
+        };
+      } catch (e) {
+        console.warn("[RSC Parse] OCR falhou, usando só texto nativo:", e);
+        ocrMeta.error = (e && e.message) || String(e);
+        ocrData = parseRequerimentoFromLines([]);
+      }
+    }
+
+    if (onProgress) onProgress({ phase: "merge", progress: 0.96 });
+
+    const data = mergeParses(textData, ocrData, {
+      ocrConfidence: ocrMeta.confidence,
+      textLines: lines.length,
+      ocrLines: ocrMeta.lines,
+    });
+
     data._sourceName = (file && file.name) || "requerimento.pdf";
     data._lineCount = lines.length;
     data._numPages = numPages;
     data._linesSample = lines.slice(0, 40);
+    data._textOnly = textData;
+    data._ocrOnly = ocrData;
+    data._ocrError = ocrMeta.error;
+    data._dualCapture = {
+      textScore: scoreParse(textData),
+      ocrScore: scoreParse(ocrData),
+      ocrConfidence: ocrMeta.confidence,
+      ocrLines: ocrMeta.lines,
+      textLines: lines.length,
+      ocrFailed: !!ocrMeta.error,
+    };
+    if (onProgress) onProgress({ phase: "done", progress: 1 });
     return data;
   }
 
   global.RSCParseRequerimento = {
     parseRequerimentoPdf,
     parseRequerimentoText,
+    parseRequerimentoFromLines,
+    mergeParses,
+    scoreParse,
+    pickFieldDetail,
+    extractPdfLines,
     extractPdfText: async (f) => {
       const { lines } = await extractPdfLines(f);
       return lines.join("\n");

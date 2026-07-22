@@ -1,8 +1,5 @@
-
-_dbg*.json
-_t.js
-_smoke.js
-
-
-_*.pdf
-
+# Amostras locais de PDF (não versionar)
+_fixtures/*.pdf
+_fixtures/node_modules/
+.DS_Store
+Thumbs.db

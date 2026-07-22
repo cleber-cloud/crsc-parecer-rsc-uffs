@@ -4,11 +4,25 @@ Ferramenta auxiliar para as Comissões de Reconhecimento de Saberes e Competênc
 
 ## O que faz
 
-1. Lê o **PDF do Requerimento** gerado pela [calculadora RSC](https://calculadora-rsc.uffs.edu.br/)
-2. Monta **checklist** de critérios (comprovado / não / pendente)
-3. Recalcula pontuação e hipóteses de indeferimento (Decreto 13.048/2026)
+1. Lê o **PDF do Requerimento** gerado pela [calculadora RSC](https://calculadora-rsc.uffs.edu.br/) com **captura dual**:
+   - texto nativo (pdf.js)
+   - **OCR em todas as páginas** (Tesseract.js, por+eng)
+   - fusão campo a campo (nome, SIAPE, nível, totais, itens…) priorizando o valor mais confiável
+2. Monta **checklist** de critérios com quantidade aceita parcial (qtd × pts/unidade)
+3. Recalcula pontuação e hipóteses de indeferimento (Decreto 13.048/2026, art. 14)
 4. Emite **parecer em PDF** (modelo ANEXO)
 5. Seleciona **assinantes** conforme campus/Reitoria (portarias 4696–4721)
+
+### Extração robusta (texto × OCR)
+
+Ao carregar o PDF, a ferramenta:
+
+1. Extrai linhas e posições com pdf.js  
+2. Renderiza cada página e roda OCR (português + inglês)  
+3. Parseia **as duas** saídas com o mesmo parser de requerimento  
+4. Cruza campos (acordo / discórdia) e exibe a tabela de comparação na interface  
+
+Isso cobre PDFs “achatados”, impressões HTML com espaços quebrados e checkboxes de nível que o stream de texto não traz.
 
 ## Uso (GitHub Pages)
 
