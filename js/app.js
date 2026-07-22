@@ -824,15 +824,25 @@
               </div>
             </div>
             <div class="crit-actions">
-              <button type="button" class="btn-diligencia ${
+              <button type="button" class="chip-btn chip-dil ${
                 hasDil ? "active" : ""
-              }" data-idx="${idx}">
-                ${hasDil ? "Editar diligência" : "Marcar para diligência"}
+              }" data-idx="${idx}" title="${
+                hasDil ? "Editar diligência" : "Marcar para diligência"
+              }">
+                <span class="chip-ico" aria-hidden="true">${
+                  hasDil ? "✎" : "⚑"
+                }</span>
+                <span>${hasDil ? "Diligência" : "Diligência"}</span>
               </button>
-              <button type="button" class="btn-obs ${
+              <button type="button" class="chip-btn chip-obs ${
                 hasObs ? "active" : ""
-              }" data-idx="${idx}">
-                ${hasObs ? "Editar observação" : "Observação"}
+              }" data-idx="${idx}" title="${
+                hasObs ? "Editar observação" : "Adicionar observação"
+              }">
+                <span class="chip-ico" aria-hidden="true">${
+                  hasObs ? "✎" : "💬"
+                }</span>
+                <span>Observação</span>
               </button>
             </div>
           </div>
@@ -939,7 +949,7 @@
       });
     });
 
-    box.querySelectorAll(".btn-diligencia").forEach((btn) => {
+    box.querySelectorAll(".chip-dil").forEach((btn) => {
       btn.addEventListener("click", () => {
         const i = Number(btn.getAttribute("data-idx"));
         state.obsOpenIdx = null;
@@ -948,7 +958,7 @@
         renderChecklist();
       });
     });
-    box.querySelectorAll(".btn-obs").forEach((btn) => {
+    box.querySelectorAll(".chip-obs").forEach((btn) => {
       btn.addEventListener("click", () => {
         const i = Number(btn.getAttribute("data-idx"));
         state.diligenciaOpenIdx = null;

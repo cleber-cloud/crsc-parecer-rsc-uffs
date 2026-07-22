@@ -183,15 +183,72 @@ input:focus,select:focus,textarea:focus{
   gap:.5rem;margin-bottom:.65rem;
 }
 .btn-sm{padding:.45rem .75rem;font-size:.72rem;border-radius:8px}
-.btn-obs{
-  border:0;border-radius:999px;padding:.45rem .85rem;
-  font:700 .72rem/1 "Fira Sans","Segoe UI",Arial,sans-serif;
-  text-transform:uppercase;letter-spacing:.03em;cursor:pointer;
-  background:#eef2ff;color:#3730a3;white-space:nowrap;
+.crit-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.45rem;
+  justify-content:flex-end;
+  margin-top:.15rem;
 }
-.btn-obs:hover{background:#e0e7ff}
-.btn-obs.active{background:#ddd6fe;box-shadow:inset 0 0 0 1px #8b5cf6}
-.crit-actions{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:flex-end}
+/* Chips modernos — diligência / observação */
+.chip-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:.4rem;
+  border:1px solid transparent;
+  border-radius:12px;
+  padding:.48rem .85rem .48rem .65rem;
+  font:600 .78rem/1.1 "Fira Sans","Segoe UI",Arial,sans-serif;
+  letter-spacing:.01em;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:transform .12s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+  box-shadow:0 1px 2px rgba(7,32,19,.04);
+}
+.chip-btn:hover{
+  transform:translateY(-1px);
+  box-shadow:0 6px 16px rgba(7,32,19,.1);
+}
+.chip-btn:active{transform:translateY(0);box-shadow:none}
+.chip-ico{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:1.35rem;
+  height:1.35rem;
+  border-radius:8px;
+  font-size:.78rem;
+  line-height:1;
+  flex-shrink:0;
+}
+.chip-dil{
+  background:linear-gradient(180deg,#f7fcf9 0%,#eef8f1 100%);
+  color:#0a5c2e;
+  border-color:#c5e6d0;
+}
+.chip-dil .chip-ico{background:#d8f3e2;color:#065228}
+.chip-dil:hover{background:linear-gradient(180deg,#eefaf2 0%,#dff3e6 100%);border-color:#9fd4b0}
+.chip-dil.active{
+  background:linear-gradient(180deg,#fff8e8 0%,#fef3c7 100%);
+  color:#92400e;
+  border-color:#f5d78a;
+  box-shadow:0 0 0 3px rgba(245,158,11,.15);
+}
+.chip-dil.active .chip-ico{background:#fde68a;color:#92400e}
+.chip-obs{
+  background:linear-gradient(180deg,#fafbff 0%,#f0f3ff 100%);
+  color:#3730a3;
+  border-color:#d4dbf7;
+}
+.chip-obs .chip-ico{background:#e0e7ff;color:#4338ca}
+.chip-obs:hover{background:linear-gradient(180deg,#f4f6ff 0%,#e8ecff 100%);border-color:#b8c3f0}
+.chip-obs.active{
+  background:linear-gradient(180deg,#f5f3ff 0%,#ede9fe 100%);
+  color:#5b21b6;
+  border-color:#c4b5fd;
+  box-shadow:0 0 0 3px rgba(139,92,246,.14);
+}
+.chip-obs.active .chip-ico{background:#ddd6fe;color:#5b21b6}
 .qty-pill.editable-decl input.qtd-decl{
   width:3.6rem;text-align:center;font-weight:800;font-size:.95rem;
   border-radius:999px;background:#fffbeb;border:1.5px solid #f59e0b;
@@ -630,23 +687,12 @@ textarea{min-height:110px;resize:vertical}
   border-color:#b7dfc4;
 }
 .qty-pill.pts .val{color:var(--uffs-green);font-size:1.05rem}
-.btn-diligencia{
-  border:0;
-  border-radius:999px;
-  padding:.45rem .85rem;
-  font:700 .72rem/1 "Fira Sans","Segoe UI",Arial,sans-serif;
-  text-transform:uppercase;
-  letter-spacing:.03em;
-  cursor:pointer;
-  background:#e8f0eb;
-  color:var(--uffs-green-darker);
-  white-space:nowrap;
+/* pills de quantidade um pouco mais “soft” */
+.qty-pill{
+  box-shadow:0 1px 2px rgba(7,32,19,.03);
 }
-.btn-diligencia:hover{background:#d8e8de}
-.btn-diligencia.active{
-  background:#fef3c7;
-  color:#92400e;
-  box-shadow:inset 0 0 0 1px #f59e0b;
+.qty-pill input.qtd-aceita{
+  transition:border-color .15s, box-shadow .15s;
 }
 .diligencia-box{
   grid-column:1 / -1;
