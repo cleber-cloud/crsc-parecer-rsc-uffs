@@ -40,7 +40,7 @@
       minPontos: 30,
       minItens: 3,
       complexidade: ["II", "IV", "V", "VI"],
-      complexidadeDesc: "Mínimo 1 item dos grupos II, IV, V ou VI",
+      complexidadeDesc: "Mínimo 1 item dos Anexos II, IV, V ou VI",
     },
     V: {
       id: "V",
@@ -49,7 +49,7 @@
       minPontos: 52,
       minItens: 5,
       complexidade: ["IV", "V", "VI"],
-      complexidadeDesc: "Mínimo 1 item dos grupos IV, V ou VI",
+      complexidadeDesc: "Mínimo 1 item dos Anexos IV, V ou VI",
     },
     VI: {
       id: "VI",
@@ -58,7 +58,7 @@
       minPontos: 75,
       minItens: 7,
       complexidade: ["VI"],
-      complexidadeDesc: "Mínimo 1 item do grupo VI",
+      complexidadeDesc: "Mínimo 1 item do Anexo VI",
     },
   };
 

@@ -432,12 +432,12 @@
       order.forEach((g) => {
         const items = rel.filter((it) => String(it.grupo) === g);
         if (!items.length) return;
-        text(`Grupo ${g}`, { size: 11, bold: true });
+        text(`Anexo ${g}`, { size: 11, bold: true });
         gap(4);
         items.forEach((it, idx) => {
           ensure(70);
           kv(
-            `${idx + 1}. Critério ${it.criterionId || "—"}: `,
+            `${idx + 1}. Item ${it.criterionId || "—"}: `,
             (it.descricao || "—").slice(0, 180) +
               ((it.descricao || "").length > 180 ? "…" : "")
           );
@@ -567,7 +567,7 @@
       itens.forEach((it, i) => {
         ensure(90);
         text(
-          `${i + 1}) Critério ${it.criterionId || "—"} (Grupo ${
+          `${i + 1}) Item ${it.criterionId || "—"} (Anexo ${
             it.grupo || "—"
           })`,
           { size: 10, bold: true }

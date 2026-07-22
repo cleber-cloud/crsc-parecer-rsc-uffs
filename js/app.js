@@ -730,12 +730,12 @@
 
     const cats = (window.RSCCriterios && window.RSCCriterios.getCategorias()) ||
       window.RSC_CATEGORIAS || {
-        I: "Grupo I",
-        II: "Grupo II",
-        III: "Grupo III",
-        IV: "Grupo IV",
-        V: "Grupo V",
-        VI: "Grupo VI",
+        I: "Anexo I",
+        II: "Anexo II",
+        III: "Anexo III",
+        IV: "Anexo IV",
+        V: "Anexo V",
+        VI: "Anexo VI",
       };
     const order = ["I", "II", "III", "IV", "V", "VI"];
     let visible = 0;
@@ -755,8 +755,8 @@
       const block = document.createElement("section");
       block.className = "grupo-block";
       block.innerHTML = `<header class="grupo-head">
-        <span class="grupo-badge">${esc(g)}</span>
-        <span class="grupo-title">${esc(cats[g] || "Critério " + g)}</span>
+        <span class="grupo-badge">Anexo ${esc(g)}</span>
+        <span class="grupo-title">${esc(cats[g] || "Anexo " + g)}</span>
         <span class="muted small">${indices.length} item(ns)</span>
       </header>`;
       const list = document.createElement("div");
@@ -786,7 +786,7 @@
           : `<span class="val">${qDecl}</span>`;
         card.innerHTML = `
           <div class="crit-main">
-            <span class="crit-id">${esc(it.criterionId || "—")}</span>
+            <span class="crit-id">Item ${esc(it.criterionId || "—")}</span>
             <div class="crit-desc">${esc(it.descricao)}</div>
             <div class="crit-meta">${esc(it.unidade)} · ${
               it.pontosUnitario != null ? it.pontosUnitario : "—"
