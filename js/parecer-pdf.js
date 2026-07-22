@@ -355,35 +355,35 @@
     );
     gap(14);
 
-    // 4. Assinaturas logo após o parecer (item 3)
-    text("4. Assinaturas da CRSC-PCCTAE", { size: 12, bold: true });
+    // 4. Assinaturas logo após o parecer (item 3) — centralizadas
+    text("4. Assinaturas da CRSC-PCCTAE", {
+      size: 12,
+      bold: true,
+      align: "center",
+    });
     gap(4);
     text(
       `Unidade: ${unidadeNome} | Designação: Portaria nº ${
         (ctx.comissao && ctx.comissao.portariaDesignacao) || "—"
       }`,
-      { size: 9 }
+      { size: 9, align: "center" }
     );
-    gap(10);
+    gap(12);
 
     const signers = ctx.assinantes || [];
     signers.forEach((s) => {
-      ensure(50);
-      text(`${s.nome}`, { size: 10, bold: true });
+      ensure(55);
+      text(`${s.nome}`, { size: 10, bold: true, align: "center" });
       text(`SIAPE ${s.siape} — ${s.segmento || ""} (${s.funcao || "Titular"})`, {
         size: 9,
+        align: "center",
       });
-      text("_________________________________", { size: 10 });
-      gap(12);
+      text("_________________________________", {
+        size: 10,
+        align: "center",
+      });
+      gap(14);
     });
-
-    gap(8);
-    text(
-      `Documento gerado em ${new Date().toLocaleString(
-        "pt-BR"
-      )} — ferramenta CRSC Parecer RSC-UFFS (teste). A deliberação formal permanece com a comissão.`,
-      { size: 8, color: rgb(0.4, 0.4, 0.4) }
-    );
 
     // ——— ANEXO: relatório auxiliar (nova página) ———
     newPage();
@@ -416,7 +416,7 @@
     gap(8);
     line();
     text(
-      "Este anexo é material de apoio à comissão. Resume, de forma didática, o que o(a) servidor(a) declarou, o que a comissão aceitou e eventuais ressalvas (observações ou diligências) por critério específico do catálogo RSC-PCCTAE. Não substitui o parecer formal.",
+      "Este anexo é material de apoio à comissão. Resume o que o(a) servidor(a) declarou, o que a comissão aceitou e eventuais ressalvas (observações ou diligências) por critério específico do RSC-PCCTAE, conforme legislação aplicável.",
       { size: 9, lh: 12 }
     );
     gap(10);
