@@ -567,7 +567,8 @@ textarea{min-height:110px;resize:vertical}
 .crit-meta{
   margin-top:.35rem;
   font-size:.78rem;
-  color:var(--uffs-muted);
+  font-weight:600;
+  color:#0a7a3a;
 }
 .crit-side{
   display:flex;
