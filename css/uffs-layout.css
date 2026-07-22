@@ -156,6 +156,10 @@ table.checklist th{
 table.checklist tr.ok{background:#f0faf3}
 table.checklist tr.no{background:#fff5f5}
 table.checklist tr.pend{background:#fffbeb}
+table.checklist tr.zero,
+table.checklist tr.row-zero{background:#fafafa;color:#6b7280}
+table.checklist td.num{white-space:nowrap;font-variant-numeric:tabular-nums}
+table.checklist .small{font-size:.78rem}
 .status-pill{
   display:inline-block;
   padding:.15rem .5rem;

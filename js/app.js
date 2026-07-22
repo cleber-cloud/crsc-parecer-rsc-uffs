@@ -15,6 +15,8 @@
     hipotesesSelecionadas: [],
     /** @type {Record<string, boolean>} chave siape → marcado */
     signerChecked: {},
+    /** ocultar linhas com qtdDeclarada === 0 */
+    hideZeroCriterios: true,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -379,36 +381,77 @@
     return 0;
   }
 
+  function syncHideZeroBtn() {
+    const btn = $("btnHideZero");
+    if (!btn) return;
+    btn.textContent = state.hideZeroCriterios
+      ? "Mostrar todos os critérios (incl. zerados)"
+      : "Ocultar critérios sem pontuação declarada";
+  }
+
   function renderChecklist() {
     const r = state.req;
     const tbody = $("checklistBody");
     tbody.innerHTML = "";
-    if (!r || !r.itens.length) {
+    const info = $("catalogInfo");
+    if (!r || !r.itens || !r.itens.length) {
       tbody.innerHTML =
-        '<tr><td colspan="8" class="muted">Nenhum critério extraído.</td></tr>';
+        '<tr><td colspan="9" class="muted">Nenhum critério no catálogo.</td></tr>';
+      if (info) info.textContent = "";
       return;
     }
+
+    const comQtd = r.itens.filter((i) => (Number(i.qtdDeclarada) || 0) > 0)
+      .length;
+    const sumDecl =
+      Math.round(
+        r.itens.reduce((s, i) => {
+          const pu = Number(i.pontosUnitario) || 0;
+          const q = Number(i.qtdDeclarada) || 0;
+          return s + q * pu;
+        }, 0) * 10
+      ) / 10;
+    if (info) {
+      const un = (r._catalogUnmatched && r._catalogUnmatched.length) || 0;
+      info.innerHTML =
+        `Catálogo canônico: <strong>${r.itens.length}</strong> critérios · ` +
+        `<strong>${comQtd}</strong> com quantidade declarada · ` +
+        `soma declarada <strong>${sumDecl}</strong> pts` +
+        (r.pontuacaoTotalDeclarada != null
+          ? ` (PDF: ${r.pontuacaoTotalDeclarada})`
+          : "") +
+        (un
+          ? ` · <span style="color:#9a3412">${un} item(ns) do PDF sem casamento no catálogo</span>`
+          : "");
+    }
+    syncHideZeroBtn();
+
     r.itens.forEach((it, idx) => {
-      if (it.qtdDeclarada == null && it.pontosUnitario && it.pontosObtidos) {
-        it.qtdDeclarada =
-          Math.round((it.pontosObtidos / it.pontosUnitario) * 1000) / 1000;
-      }
-      if (it.qtdAceita == null) it.qtdAceita = it.qtdDeclarada ?? 0;
+      if (it.qtdDeclarada == null) it.qtdDeclarada = 0;
+      if (it.qtdAceita == null) it.qtdAceita = it.qtdDeclarada;
+      const qDecl = Number(it.qtdDeclarada) || 0;
+      if (state.hideZeroCriterios && qDecl <= 0) return;
+
       const pts = pontosItem(it);
       const tr = document.createElement("tr");
       const st =
         Number(it.qtdAceita) <= 0
-          ? "no"
-          : Number(it.qtdAceita) < Number(it.qtdDeclarada)
+          ? qDecl > 0
+            ? "no"
+            : "zero"
+          : Number(it.qtdAceita) < qDecl
             ? "pend"
             : "ok";
       tr.className = st;
+      if (qDecl <= 0) tr.classList.add("row-zero");
+      const idLabel = it.criterionId || "—";
       tr.innerHTML = `
-        <td>${esc(it.grupo || "—")}</td>
+        <td><strong>${esc(it.grupo || "—")}</strong></td>
+        <td class="num small" title="Identificador canônico">${esc(idLabel)}</td>
         <td>${esc(it.descricao)}</td>
         <td>${esc(it.unidade)}</td>
         <td class="num">${it.pontosUnitario != null ? it.pontosUnitario : "—"}</td>
-        <td class="num">${it.qtdDeclarada != null ? it.qtdDeclarada : "—"}</td>
+        <td class="num">${qDecl}</td>
         <td><input type="number" min="0" step="any" class="qtd-aceita" data-idx="${idx}" value="${
           it.qtdAceita != null ? it.qtdAceita : 0
         }" style="width:4.5rem"></td>
@@ -419,22 +462,29 @@
       tbody.appendChild(tr);
     });
 
+    if (!tbody.children.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="9" class="muted">Nenhum critério com pontuação declarada. Use “Mostrar todos os critérios”.</td></tr>';
+    }
+
     tbody.querySelectorAll(".qtd-aceita").forEach((el) => {
       el.addEventListener("input", () => {
         const i = Number(el.getAttribute("data-idx"));
         let v = Number(el.value);
         if (!Number.isFinite(v) || v < 0) v = 0;
         const max = Number(state.req.itens[i].qtdDeclarada);
-        if (Number.isFinite(max) && v > max) v = max;
+        // permitir qtd aceita até o declarado; se declarado 0, permite editar (comissão pode incluir)
+        if (Number.isFinite(max) && max > 0 && v > max) v = max;
         state.req.itens[i].qtdAceita = v;
         state.req.itens[i].aceito = v <= 0 ? "no" : "ok";
         const pts = pontosItem(state.req.itens[i]);
         const cell = tbody.querySelector(`.pts-aceitos[data-idx="${i}"]`);
         if (cell) cell.textContent = String(pts);
         const tr = el.closest("tr");
-        const qd = Number(state.req.itens[i].qtdDeclarada);
+        const qd = Number(state.req.itens[i].qtdDeclarada) || 0;
         tr.className =
-          v <= 0 ? "no" : Number.isFinite(qd) && v < qd ? "pend" : "ok";
+          v <= 0 ? (qd > 0 ? "no" : "zero") : v < qd ? "pend" : "ok";
+        if (qd <= 0) tr.classList.add("row-zero");
         updateAvaliacao();
       });
     });
@@ -558,13 +608,21 @@
       updateAvaliacao();
       checkImpedimento();
       const m = data._merge || {};
+      const cat = data._catalogMeta || {};
+      const comQtd =
+        cat.comPontuacao != null
+          ? cat.comPontuacao
+          : (data.itens || []).filter((i) => (Number(i.qtdDeclarada) || 0) > 0)
+              .length;
       const miss = [];
       if (!data.nome) miss.push("nome");
       if (!data.siape) miss.push("SIAPE");
       if (!data.nivelRsc) miss.push("nível");
-      if (!data.itens.length) miss.push("itens");
+      if (!comQtd) miss.push("quantidades");
       prog.textContent =
-        `Pronto · ${data.itens.length} critério(s) · fusão ${m.winner || "text/ocr"}` +
+        `Pronto · catálogo ${data.itens.length} · ${comQtd} com qtd · fusão ${
+          m.winner || "text/ocr"
+        }` +
         (m.ocrConfidence != null
           ? ` · OCR ~${Math.round(m.ocrConfidence)}%`
           : "") +
@@ -573,12 +631,14 @@
           : "");
       if (miss.length) {
         toast(
-          `Extração parcial — confira: ${miss.join(", ")}. ${data.itens.length} critério(s).`,
+          `Extração parcial — confira: ${miss.join(
+            ", "
+          )}. ${comQtd} critério(s) com quantidade no PDF.`,
           "err"
         );
       } else {
         toast(
-          `Alta precisão: ${data.itens.length} critério(s), nível RSC ${data.nivelRsc}, SIAPE ${data.siape}. Revise a tabela texto×OCR se quiser.`,
+          `Catálogo completo (${data.itens.length}) · ${comQtd} com pontuação declarada · RSC ${data.nivelRsc} · SIAPE ${data.siape}.`,
           "ok"
         );
       }
@@ -697,6 +757,10 @@
       if (input.files[0]) onFile(input.files[0]);
     });
 
+    $("btnHideZero").addEventListener("click", () => {
+      state.hideZeroCriterios = !state.hideZeroCriterios;
+      renderChecklist();
+    });
     $("btnAllOk").addEventListener("click", () => {
       if (!state.req) return;
       state.req.itens.forEach((i) => {

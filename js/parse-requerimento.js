@@ -1343,6 +1343,36 @@
       ocrLines: ocrMeta.lines,
     });
 
+    // Catálogo canônico (calculadora/decreto): grupo, descrição, unidade e pts/unid.
+    // Do PDF só entram as quantidades declaradas.
+    data._itensRaw = data.itens || [];
+    if (global.RSCCriterios && global.RSCCriterios.expandItensToCatalog) {
+      const exp = global.RSCCriterios.expandItensToCatalog(data._itensRaw);
+      data.itens = exp.itens;
+      data._catalogMatches = exp.matches;
+      data._catalogUnmatched = exp.unmatched;
+      const sumCat =
+        Math.round(
+          exp.itens.reduce((s, i) => s + (Number(i.pontosObtidos) || 0), 0) * 10
+        ) / 10;
+      data._catalogSum = sumCat;
+      // se o total declarado no PDF não veio, usar soma do catálogo
+      if (data.pontuacaoTotalDeclarada == null && sumCat > 0) {
+        data.pontuacaoTotalDeclarada = sumCat;
+      }
+      // qtd de critérios com declaração > 0
+      const qtdPos = exp.itens.filter((i) => (Number(i.qtdDeclarada) || 0) > 0)
+        .length;
+      if (data.qtdCriteriosDeclarada == null || data.qtdCriteriosDeclarada === 0) {
+        data.qtdCriteriosDeclarada = qtdPos;
+      }
+      data._catalogMeta = {
+        total: exp.itens.length,
+        comPontuacao: qtdPos,
+        unmatched: (exp.unmatched || []).length,
+      };
+    }
+
     data._sourceName = (file && file.name) || "requerimento.pdf";
     data._lineCount = lines.length;
     data._numPages = numPages;

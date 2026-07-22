@@ -78,6 +78,8 @@ async function findPlaywright() {
 }
 
 function summarize(data) {
+  const itens = data.itens || [];
+  const comQtd = itens.filter((i) => (Number(i.qtdDeclarada) || 0) > 0);
   return {
     nome: data.nome,
     siape: data.siape,
@@ -88,11 +90,17 @@ function summarize(data) {
     nivelRsc: data.nivelRsc,
     pontMin: data.pontuacaoMinimaDeclarada,
     pontTotal: data.pontuacaoTotalDeclarada,
-    nItens: (data.itens || []).length,
+    nItens: itens.length,
+    nComQtd: comQtd.length,
     sumItens:
       Math.round(
-        (data.itens || []).reduce((s, i) => s + (Number(i.pontosObtidos) || 0), 0) * 10
+        itens.reduce((s, i) => s + (Number(i.pontosObtidos) || 0), 0) * 10
       ) / 10,
+    matchedIds: comQtd.map((i) => `${i.criterionId}=${i.qtdDeclarada}`),
+    unmatched: (data._catalogUnmatched || []).map((u) =>
+      String(u.item?.descricao || "").slice(0, 60)
+    ),
+    catalogMeta: data._catalogMeta || null,
     merge: data._merge
       ? {
           scoreText: data._merge.scoreText,
@@ -136,7 +144,12 @@ async function main() {
 
   await page.goto(base + "/index.html", { waitUntil: "networkidle" });
   await page.waitForFunction(
-    () => window.RSCParseRequerimento && window.pdfjsLib && window.RSCRegras
+    () =>
+      window.RSCParseRequerimento &&
+      window.pdfjsLib &&
+      window.RSCRegras &&
+      window.RSCCriterios &&
+      window.RSC_CRITERIOS_ORDEM
   );
 
   const pdfs = (await readdir(FIX))
@@ -174,12 +187,15 @@ async function main() {
     if (!s.siape || !/^\d{6,8}$/.test(String(s.siape))) fails.push("siape");
     if (!s.nome || s.nome.length < 5) fails.push("nome");
     if (!s.nivelRsc) fails.push("nivelRsc");
-    if (!s.nItens) fails.push("itens");
+    if (s.nItens < 50) fails.push(`catalog-size=${s.nItens}`);
+    if (!s.nComQtd) fails.push("sem-qtd");
     if (s.pontTotal != null && s.sumItens != null) {
       const d = Math.abs(s.pontTotal - s.sumItens);
       if (d > 5) fails.push(`soma-itens-diff=${d}`);
     }
-    console.log(fails.length ? "FAIL: " + fails.join(", ") : "PASS (campos básicos)");
+    if (s.unmatched && s.unmatched.length)
+      fails.push(`unmatched=${s.unmatched.length}`);
+    console.log(fails.length ? "FAIL: " + fails.join(", ") : "PASS (catálogo + quantidades)");
   }
 
   await browser.close();
