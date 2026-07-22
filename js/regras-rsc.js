@@ -7,7 +7,7 @@
 
   /**
    * Art. 5º do Decreto nº 13.048/2026 — requisitos por nível:
-   * I  — 10 pts (sem mínimo de critérios específicos)
+   * I  — 10 pts; na prática ≥1 critério (pontos só existem via item dos Anexos)
    * II — 15 pts + 2 critérios
    * III — 25 pts + 2 critérios
    * IV — 30 pts + 3 critérios, ≥1 do art. 3º II, IV, V ou VI (Anexos II, IV, V, VI)
@@ -22,7 +22,7 @@
       nome: "RSC-PCCTAE I",
       percentual: 10,
       minPontos: 10,
-      minItens: 0,
+      minItens: 1,
       complexidade: null,
       complexidadeDesc: "—",
     },
