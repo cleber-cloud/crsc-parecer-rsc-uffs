@@ -714,7 +714,7 @@
       const nDil = r.itens.filter((i) => i.diligencia && i.diligencia.texto)
         .length;
       info.innerHTML =
-        `Catálogo canônico: <strong>${r.itens.length}</strong> critérios · ` +
+        `Total de critérios específicos/itens: <strong>${r.itens.length}</strong> · ` +
         `<strong>${comQtd}</strong> com quantidade declarada · ` +
         `soma declarada <strong>${sumDecl}</strong> pts` +
         (r.pontuacaoTotalDeclarada != null
