@@ -4,6 +4,10 @@
 (function () {
   "use strict";
 
+  const STORAGE_KEY = "crsc-parecer-rsc-uffs-session-v1";
+  const STORAGE_META_KEY = "crsc-parecer-rsc-uffs-session-meta-v1";
+  const SNAPSHOT_VERSION = 1;
+
   const state = {
     req: null,
     comissaoId: "",
@@ -29,7 +33,13 @@
     diligenciaOpenIdx: null,
     /** índice do item com caixa de observação aberta */
     obsOpenIdx: null,
+    /** painéis recolhidos */
+    signersPanelHidden: false,
+    hipotesesPanelHidden: false,
   };
+
+  let autosaveTimer = null;
+  let suppressAutosave = false;
 
   function todayISO() {
     const d = new Date();
@@ -638,6 +648,7 @@
           el.removeAttribute("readonly");
         }
         updateAvaliacao();
+        scheduleAutosave();
       };
       el.addEventListener("change", apply);
       el.addEventListener("blur", apply);
@@ -888,6 +899,7 @@
           (q <= 0 ? (qd > 0 ? "no" : "zero") : q < qd ? "pend" : "ok");
       }
       updateAvaliacao();
+      scheduleAutosave();
     }
 
     box.querySelectorAll(".qtd-decl").forEach((el) => {
@@ -956,6 +968,7 @@
         // NÃO marca o checkbox "Houve diligências" (isso é só no parecer final)
         renderChecklist();
         updateDiligenciaBtn();
+        scheduleAutosave();
         toast(
           "Diligência salva no item " +
             (state.req.itens[i].criterionId || i) +
@@ -991,6 +1004,7 @@
         state.req.itens[i].observacao = txt;
         state.obsOpenIdx = null;
         renderChecklist();
+        scheduleAutosave();
         toast("Observação salva.", "ok");
       });
     });
@@ -1133,6 +1147,8 @@
       updateDiligenciaBtn();
       const btnCmp = $("btnToggleCompare");
       if (btnCmp) btnCmp.disabled = false;
+      scheduleAutosave();
+      saveToLocalStorage(false);
       const m = data._merge || {};
       const cat = data._catalogMeta || {};
       const comQtd =
@@ -1335,9 +1351,436 @@
     }
   }
 
+  /** Deep-clone JSON-safe (sem perder estrutura da sessão). */
+  function cloneJson(obj) {
+    return JSON.parse(JSON.stringify(obj === undefined ? null : obj));
+  }
+
+  function brToIsoDate(br) {
+    if (!br) return "";
+    const m = String(br).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (m) return m[3] + "-" + m[2] + "-" + m[1];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(br)) return br;
+    return "";
+  }
+
+  /**
+   * Snapshot completo da sessão — backup não deve perder informação.
+   */
+  function buildSnapshot() {
+    const justEl = $("justificativa");
+    return {
+      version: SNAPSHOT_VERSION,
+      app: "crsc-parecer-rsc-uffs",
+      savedAt: new Date().toISOString(),
+      savedAtLabel: new Date().toLocaleString("pt-BR"),
+      state: {
+        req: state.req ? cloneJson(state.req) : null,
+        comissaoId: state.comissaoId,
+        numeroProcesso: state.numeroProcesso,
+        dataRequerimento: state.dataRequerimento,
+        prioridade: state.prioridade,
+        diligencias: state.diligencias,
+        dataEnvioDiligencia: state.dataEnvioDiligencia,
+        dataRetornoDiligencia: state.dataRetornoDiligencia,
+        vigencia: state.vigencia,
+        hipotesesSelecionadas: cloneJson(state.hipotesesSelecionadas || []),
+        signerChecked: cloneJson(state.signerChecked || {}),
+        hideZeroCriterios: !!state.hideZeroCriterios,
+        editQtdDeclarada: !!state.editQtdDeclarada,
+        compareOpen: !!state.compareOpen,
+        confirmedFields: cloneJson(state.confirmedFields || {}),
+        diligenciaOpenIdx: null,
+        obsOpenIdx: null,
+        signersPanelHidden: !!state.signersPanelHidden,
+        hipotesesPanelHidden: !!state.hipotesesPanelHidden,
+        _avaliacao: state._avaliacao ? cloneJson(state._avaliacao) : null,
+      },
+      forms: {
+        justificativa: justEl ? justEl.value : "",
+        numProcesso: ($("numProcesso") && $("numProcesso").value) || state.numeroProcesso,
+        dataReqIso: ($("dataReq") && $("dataReq").value) || brToIsoDate(state.dataRequerimento),
+        vigenciaIso: ($("vigencia") && $("vigencia").value) || brToIsoDate(state.vigencia),
+        dataEnvioDil: ($("dataEnvioDil") && $("dataEnvioDil").value) || state.dataEnvioDiligencia,
+        dataRetornoDil:
+          ($("dataRetornoDil") && $("dataRetornoDil").value) ||
+          state.dataRetornoDiligencia,
+        chkPrioridade: !!(
+          $("chkPrioridade") && $("chkPrioridade").checked
+        ),
+        chkDiligencias: !!(
+          $("chkDiligencias") && $("chkDiligencias").checked
+        ),
+        selUnidade: ($("selUnidade") && $("selUnidade").value) || state.comissaoId,
+      },
+      ui: {
+        step2Visible: !$("step2") || !$("step2").classList.contains("hidden"),
+        step3Visible: !$("step3") || !$("step3").classList.contains("hidden"),
+        fileName: ($("fileName") && $("fileName").textContent) || "",
+      },
+    };
+  }
+
+  function updateSessionStatus(snap) {
+    const el = $("sessionStatus");
+    if (!el) return;
+    if (!snap || !snap.savedAtLabel) {
+      try {
+        const meta = localStorage.getItem(STORAGE_META_KEY);
+        if (meta) {
+          const m = JSON.parse(meta);
+          el.textContent =
+            "Sessão no navegador: " +
+            (m.savedAtLabel || m.savedAt || "salva") +
+            (m.siape ? " · SIAPE " + m.siape : "") +
+            (m.processo ? " · " + m.processo : "");
+          return;
+        }
+      } catch (_) {}
+      el.textContent = "Nenhuma sessão salva neste navegador.";
+      return;
+    }
+    const siape = snap.state && snap.state.req && snap.state.req.siape;
+    const proc =
+      (snap.state && snap.state.numeroProcesso) ||
+      (snap.forms && snap.forms.numProcesso) ||
+      "";
+    el.textContent =
+      "Sessão: " +
+      snap.savedAtLabel +
+      (siape ? " · SIAPE " + siape : "") +
+      (proc ? " · " + proc : "");
+  }
+
+  function saveToLocalStorage(showToast) {
+    try {
+      const snap = buildSnapshot();
+      const json = JSON.stringify(snap);
+      localStorage.setItem(STORAGE_KEY, json);
+      localStorage.setItem(
+        STORAGE_META_KEY,
+        JSON.stringify({
+          savedAt: snap.savedAt,
+          savedAtLabel: snap.savedAtLabel,
+          siape: snap.state.req && snap.state.req.siape,
+          processo: snap.state.numeroProcesso,
+          version: snap.version,
+          bytes: json.length,
+        })
+      );
+      updateSessionStatus(snap);
+      if (showToast !== false) {
+        toast(
+          "Dados salvos no navegador (" +
+            Math.round(json.length / 1024) +
+            " KB).",
+          "ok"
+        );
+      }
+      return true;
+    } catch (e) {
+      console.error(e);
+      toast(
+        e && e.name === "QuotaExceededError"
+          ? "Espaço do navegador insuficiente. Use “Backup (arquivo)” e limpe dados antigos."
+          : "Não foi possível salvar no navegador: " +
+              ((e && e.message) || String(e)),
+        "err"
+      );
+      return false;
+    }
+  }
+
+  function scheduleAutosave() {
+    if (suppressAutosave) return;
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => {
+      // autosave silencioso se houver algo relevante
+      if (
+        state.req ||
+        state.numeroProcesso ||
+        state.comissaoId ||
+        (state.hipotesesSelecionadas && state.hipotesesSelecionadas.length)
+      ) {
+        saveToLocalStorage(false);
+      }
+    }, 1200);
+  }
+
+  function downloadBackup() {
+    try {
+      const snap = buildSnapshot();
+      const json = JSON.stringify(snap, null, 2);
+      const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+      const a = document.createElement("a");
+      const stamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")
+        .slice(0, 19);
+      const safe = (
+        (snap.state.req && snap.state.req.siape) ||
+        "sessao"
+      ).replace(/\W/g, "");
+      a.href = URL.createObjectURL(blob);
+      a.download = `Backup_CRSC_Parecer_${safe}_${stamp}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      // também grava local
+      saveToLocalStorage(false);
+      toast("Backup completo baixado (JSON com toda a sessão).", "ok");
+    } catch (e) {
+      console.error(e);
+      toast("Falha ao gerar backup: " + ((e && e.message) || e), "err");
+    }
+  }
+
+  function applySnapshot(snap, opts) {
+    opts = opts || {};
+    if (!snap || !snap.state) {
+      toast("Arquivo de sessão inválido ou incompleto.", "err");
+      return false;
+    }
+    suppressAutosave = true;
+    try {
+      const s = snap.state;
+      const f = snap.forms || {};
+      const ui = snap.ui || {};
+
+      state.req = s.req ? cloneJson(s.req) : null;
+      state.comissaoId = s.comissaoId || f.selUnidade || "";
+      state.numeroProcesso = s.numeroProcesso || f.numProcesso || "";
+      state.dataRequerimento = s.dataRequerimento || "";
+      state.prioridade =
+        s.prioridade != null ? !!s.prioridade : !!f.chkPrioridade;
+      state.diligencias =
+        s.diligencias != null ? !!s.diligencias : !!f.chkDiligencias;
+      state.dataEnvioDiligencia =
+        s.dataEnvioDiligencia || f.dataEnvioDil || "";
+      state.dataRetornoDiligencia =
+        s.dataRetornoDiligencia || f.dataRetornoDil || "";
+      state.vigencia = s.vigencia || "";
+      state.hipotesesSelecionadas = cloneJson(
+        s.hipotesesSelecionadas || []
+      );
+      state.signerChecked = cloneJson(s.signerChecked || {});
+      state.hideZeroCriterios =
+        s.hideZeroCriterios != null ? !!s.hideZeroCriterios : true;
+      state.editQtdDeclarada = !!s.editQtdDeclarada;
+      state.compareOpen = !!s.compareOpen;
+      state.confirmedFields = cloneJson(s.confirmedFields || {});
+      state.diligenciaOpenIdx = null;
+      state.obsOpenIdx = null;
+      state.signersPanelHidden = !!s.signersPanelHidden;
+      state.hipotesesPanelHidden = !!s.hipotesesPanelHidden;
+      state._avaliacao = s._avaliacao ? cloneJson(s._avaliacao) : null;
+
+      // formulários
+      if ($("numProcesso"))
+        $("numProcesso").value = state.numeroProcesso || "";
+      if ($("selUnidade")) $("selUnidade").value = state.comissaoId || "";
+      if ($("dataReq")) {
+        $("dataReq").value =
+          f.dataReqIso || brToIsoDate(state.dataRequerimento) || "";
+      }
+      if ($("vigencia")) {
+        $("vigencia").value =
+          f.vigenciaIso || brToIsoDate(state.vigencia) || todayISO();
+        if (!state.vigencia) state.vigencia = fmtDateBr($("vigencia").value);
+      }
+      if ($("chkPrioridade"))
+        $("chkPrioridade").checked = state.prioridade;
+      if ($("chkDiligencias"))
+        $("chkDiligencias").checked = state.diligencias;
+      if ($("dataEnvioDil"))
+        $("dataEnvioDil").value = state.dataEnvioDiligencia || "";
+      if ($("dataRetornoDil"))
+        $("dataRetornoDil").value = state.dataRetornoDiligencia || "";
+      if ($("justificativa"))
+        $("justificativa").value = f.justificativa || "";
+      if ($("fileName"))
+        $("fileName").textContent =
+          ui.fileName ||
+          (state.req && state.req._sourceName) ||
+          (state.req ? "Sessão restaurada" : "");
+
+      syncDiligenciaDatasUI();
+      renderSigners();
+      const sigPanel = $("signersPanel");
+      const toggleSig = $("toggleSigners");
+      if (sigPanel) {
+        if (state.signersPanelHidden) sigPanel.classList.add("hidden");
+        else sigPanel.classList.remove("hidden");
+      }
+      if (toggleSig) {
+        toggleSig.textContent = state.signersPanelHidden
+          ? "Mostrar assinantes"
+          : "Ocultar assinantes";
+      }
+
+      renderHipotesesDropdown();
+      const hipPanel = $("hipotesesPanel");
+      if (hipPanel) {
+        if (state.hipotesesPanelHidden) hipPanel.classList.add("hidden");
+        else hipPanel.classList.remove("hidden");
+      }
+
+      if (state.req) {
+        $("step2").classList.remove("hidden");
+        $("step3").classList.remove("hidden");
+        const btnCmp = $("btnToggleCompare");
+        if (btnCmp) btnCmp.disabled = false;
+        renderIdent();
+        renderChecklist();
+        renderCompare();
+        updateAvaliacao();
+        checkImpedimento();
+        updateDiligenciaBtn();
+      } else {
+        $("step2").classList.add("hidden");
+        $("step3").classList.add("hidden");
+        if ($("identBox")) {
+          $("identBox").classList.add("hidden");
+          $("identBox").innerHTML = "";
+        }
+        if ($("compareBox")) {
+          $("compareBox").classList.add("hidden");
+          $("compareBox").innerHTML = "";
+        }
+        if ($("checklistBody")) $("checklistBody").innerHTML = "";
+        if ($("metricsBox")) $("metricsBox").innerHTML = "";
+      }
+
+      updateSessionStatus(snap);
+      if (opts.toast !== false) {
+        toast(
+          "Sessão restaurada" +
+            (snap.savedAtLabel ? " (" + snap.savedAtLabel + ")" : "") +
+            ".",
+          "ok"
+        );
+      }
+      return true;
+    } catch (e) {
+      console.error(e);
+      toast("Falha ao restaurar sessão: " + ((e && e.message) || e), "err");
+      return false;
+    } finally {
+      suppressAutosave = false;
+    }
+  }
+
+  function loadFromLocalStorage(showToast) {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        toast("Não há dados salvos neste navegador.", "err");
+        return false;
+      }
+      const snap = JSON.parse(raw);
+      return applySnapshot(snap, { toast: showToast !== false });
+    } catch (e) {
+      console.error(e);
+      toast("Dados locais corrompidos ou ilegíveis.", "err");
+      return false;
+    }
+  }
+
+  function clearLocalData() {
+    const ok = window.confirm(
+      "Limpar todos os dados locais deste navegador e reiniciar a tela?\n\nIsso não apaga arquivos de backup que você já baixou."
+    );
+    if (!ok) return;
+    suppressAutosave = true;
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_META_KEY);
+    } catch (_) {}
+
+    // reset state
+    state.req = null;
+    state.comissaoId = "";
+    state.numeroProcesso = "";
+    state.dataRequerimento = "";
+    state.prioridade = false;
+    state.diligencias = false;
+    state.dataEnvioDiligencia = "";
+    state.dataRetornoDiligencia = "";
+    state.vigencia = fmtDateBr(todayISO());
+    state.hipotesesSelecionadas = [];
+    state.signerChecked = {};
+    state.hideZeroCriterios = true;
+    state.editQtdDeclarada = false;
+    state.compareOpen = false;
+    state.confirmedFields = {};
+    state.diligenciaOpenIdx = null;
+    state.obsOpenIdx = null;
+    state.signersPanelHidden = false;
+    state.hipotesesPanelHidden = false;
+    state._avaliacao = null;
+
+    if ($("numProcesso")) $("numProcesso").value = "";
+    if ($("selUnidade")) $("selUnidade").value = "";
+    if ($("dataReq")) $("dataReq").value = "";
+    if ($("vigencia")) $("vigencia").value = todayISO();
+    if ($("chkPrioridade")) $("chkPrioridade").checked = false;
+    if ($("chkDiligencias")) $("chkDiligencias").checked = false;
+    if ($("dataEnvioDil")) $("dataEnvioDil").value = "";
+    if ($("dataRetornoDil")) $("dataRetornoDil").value = "";
+    if ($("justificativa")) $("justificativa").value = "";
+    if ($("fileName")) $("fileName").textContent = "";
+    if ($("ocrProgress")) {
+      $("ocrProgress").textContent = "";
+      $("ocrProgress").classList.add("hidden");
+    }
+    if ($("ocrBar")) $("ocrBar").classList.add("hidden");
+    if ($("identBox")) {
+      $("identBox").classList.add("hidden");
+      $("identBox").innerHTML = "";
+    }
+    if ($("compareBox")) {
+      $("compareBox").classList.add("hidden");
+      $("compareBox").innerHTML = "";
+    }
+    if ($("step2")) $("step2").classList.add("hidden");
+    if ($("step3")) $("step3").classList.add("hidden");
+    if ($("checklistBody")) $("checklistBody").innerHTML = "";
+    if ($("metricsBox")) $("metricsBox").innerHTML = "";
+    if ($("hipotesesBox")) $("hipotesesBox").classList.add("hidden");
+    if ($("btnParecer")) $("btnParecer").disabled = true;
+    if ($("btnToggleCompare")) $("btnToggleCompare").disabled = true;
+    if ($("fileInput")) $("fileInput").value = "";
+
+    syncDiligenciaDatasUI();
+    renderSigners();
+    renderHipotesesDropdown();
+    updateDiligenciaBtn();
+    updateSessionStatus(null);
+    suppressAutosave = false;
+    toast("Dados locais apagados. Sessão reiniciada.", "ok");
+  }
+
+  async function restoreFromBackupFile(file) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const snap = JSON.parse(text);
+      if (!snap.state && !snap.version) {
+        toast("JSON não parece um backup desta ferramenta.", "err");
+        return;
+      }
+      if (applySnapshot(snap)) {
+        saveToLocalStorage(false);
+      }
+    } catch (e) {
+      console.error(e);
+      toast("Não foi possível ler o arquivo de backup.", "err");
+    }
+  }
+
   function bind() {
     fillUnidades();
     renderHipotesesDropdown();
+    updateSessionStatus(null);
 
     const msgOk = $("msgModalOk");
     if (msgOk) msgOk.addEventListener("click", closeMsgModal);
@@ -1347,43 +1790,77 @@
       if (e.key === "Escape") closeMsgModal();
     });
 
+    // Sessão / backup
+    if ($("btnSaveLocal"))
+      $("btnSaveLocal").addEventListener("click", () => saveToLocalStorage(true));
+    if ($("btnLoadLocal"))
+      $("btnLoadLocal").addEventListener("click", () => loadFromLocalStorage(true));
+    if ($("btnBackup"))
+      $("btnBackup").addEventListener("click", downloadBackup);
+    if ($("btnClearLocal"))
+      $("btnClearLocal").addEventListener("click", clearLocalData);
+    if ($("btnRestoreBackup")) {
+      $("btnRestoreBackup").addEventListener("click", () => {
+        const inp = $("backupFileInput");
+        if (inp) inp.click();
+      });
+    }
+    if ($("backupFileInput")) {
+      $("backupFileInput").addEventListener("change", () => {
+        const f = $("backupFileInput").files && $("backupFileInput").files[0];
+        if (f) restoreFromBackupFile(f);
+        $("backupFileInput").value = "";
+      });
+    }
+
     $("selUnidade").addEventListener("change", (e) => {
       state.comissaoId = e.target.value;
       state.signerChecked = {};
       renderSigners();
+      scheduleAutosave();
     });
     $("numProcesso").addEventListener("input", (e) => {
       state.numeroProcesso = e.target.value;
+      scheduleAutosave();
     });
     $("dataReq").addEventListener("change", (e) => {
       state.dataRequerimento = e.target.value
         ? e.target.value.split("-").reverse().join("/")
         : "";
+      scheduleAutosave();
     });
     $("chkPrioridade").addEventListener("change", (e) => {
       state.prioridade = e.target.checked;
+      scheduleAutosave();
     });
     $("chkDiligencias").addEventListener("change", (e) => {
       state.diligencias = e.target.checked;
       syncDiligenciaDatasUI();
+      scheduleAutosave();
     });
     const envDil = $("dataEnvioDil");
     if (envDil) {
       envDil.addEventListener("change", (e) => {
         state.dataEnvioDiligencia = e.target.value;
+        scheduleAutosave();
       });
     }
     const retDil = $("dataRetornoDil");
     if (retDil) {
       retDil.addEventListener("change", (e) => {
         state.dataRetornoDiligencia = e.target.value;
+        scheduleAutosave();
       });
     }
     $("vigencia").addEventListener("change", (e) => {
       state.vigencia = e.target.value
         ? e.target.value.split("-").reverse().join("/")
         : "";
+      scheduleAutosave();
     });
+    if ($("justificativa")) {
+      $("justificativa").addEventListener("input", () => scheduleAutosave());
+    }
     const drop = $("fileDrop");
     const input = $("fileInput");
     drop.addEventListener("click", () => input.click());
@@ -1445,7 +1922,11 @@
     const toggle = $("toggleHipoteses");
     if (toggle) {
       toggle.addEventListener("click", () => {
-        $("hipotesesPanel").classList.toggle("hidden");
+        const panel = $("hipotesesPanel");
+        if (!panel) return;
+        panel.classList.toggle("hidden");
+        state.hipotesesPanelHidden = panel.classList.contains("hidden");
+        scheduleAutosave();
       });
     }
     // toggle painel assinantes
@@ -1455,11 +1936,26 @@
         const panel = $("signersPanel");
         if (!panel) return;
         panel.classList.toggle("hidden");
-        toggleSig.textContent = panel.classList.contains("hidden")
+        state.signersPanelHidden = panel.classList.contains("hidden");
+        toggleSig.textContent = state.signersPanelHidden
           ? "Mostrar assinantes"
           : "Ocultar assinantes";
+        scheduleAutosave();
       });
     }
+
+    // Restaura sessão automaticamente se existir
+    try {
+      if (localStorage.getItem(STORAGE_KEY)) {
+        loadFromLocalStorage(false);
+        updateSessionStatus(null);
+        const el = $("sessionStatus");
+        if (el && !el.textContent.includes("Nenhuma")) {
+          /* already set */
+        }
+        toast("Sessão anterior restaurada do navegador.", "info");
+      }
+    } catch (_) {}
   }
 
   document.addEventListener("DOMContentLoaded", bind);

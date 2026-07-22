@@ -22,6 +22,20 @@
     </div>
   </header>
 
+  <div class="session-bar">
+    <div class="wrap session-bar-inner">
+      <div class="session-bar-actions">
+        <button type="button" class="btn btn-session" id="btnSaveLocal" title="Salva a sessão no navegador (localStorage)">Salvar dados</button>
+        <button type="button" class="btn btn-session" id="btnLoadLocal" title="Restaura a última sessão salva no navegador">Carregar dados</button>
+        <button type="button" class="btn btn-session" id="btnBackup" title="Baixa um arquivo JSON com todo o estado da sessão">Backup (arquivo)</button>
+        <button type="button" class="btn btn-session" id="btnRestoreBackup" title="Restaura a partir de um arquivo de backup JSON">Restaurar backup</button>
+        <button type="button" class="btn btn-session btn-session-danger" id="btnClearLocal" title="Apaga dados salvos neste navegador e limpa a tela">Limpar dados locais</button>
+        <input id="backupFileInput" type="file" accept="application/json,.json" class="hidden" />
+      </div>
+      <p id="sessionStatus" class="session-status muted small">Nenhuma sessão salva neste navegador.</p>
+    </div>
+  </div>
+
   <main class="wrap">
     <section class="hero hero-compact">
       <div class="badge">Ferramenta auxiliar da comissão</div>
@@ -30,6 +44,7 @@
         Carregue o PDF do Requerimento da
         <a href="https://calculadora-rsc.uffs.edu.br/" target="_blank" rel="noopener">calculadora RSC</a>,
         confira o checklist e emita diligência ou parecer. Base: Decreto nº 13.048/2026 e Regimento CRSC.
+        Use <strong>Salvar dados</strong> / <strong>Backup</strong> para não perder o trabalho.
       </p>
     </section>
 
