@@ -623,7 +623,7 @@
     text(
       `Documento gerado em ${new Date().toLocaleString(
         "pt-BR"
-      )} — ferramenta CRSC Parecer RSC-UFFS (teste).`,
+      )}.`,
       { size: 8, color: rgb(0.4, 0.4, 0.4) }
     );
 

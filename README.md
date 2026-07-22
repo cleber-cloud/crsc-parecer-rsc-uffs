@@ -1,4 +1,4 @@
-# CRSC Parecer RSC-PCCTAE (UFFS)
+# Parecer da CRSC-PCCTAE UFFS
 
 Ferramenta auxiliar para as Comissões de Reconhecimento de Saberes e Competências (CRSC-PCCTAE) da UFFS.
 
