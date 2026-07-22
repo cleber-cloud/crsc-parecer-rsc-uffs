@@ -163,6 +163,13 @@ input:focus,select:focus,textarea:focus{
 .btn-secondary{background:#e8f0eb;color:var(--uffs-green-darker)}
 .btn-secondary:hover{background:#d8e8de}
 .btn-row{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1rem}
+.btn-row-split{
+  justify-content:space-between;
+  align-items:center;
+}
+.btn-row-split #btnGerarDiligencia{
+  margin-left:auto;
+}
 .file-drop{
   border:2px dashed #c5dfcf;
   border-radius:14px;
