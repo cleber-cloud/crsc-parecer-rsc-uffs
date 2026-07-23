@@ -2042,8 +2042,10 @@
       state.obsOpenIdx = null;
       state.diligenciaGeral = s.diligenciaGeral || "";
       state.diligenciaGeralOpen = false;
-      state.hipotesesPanelHidden = !!s.hipotesesPanelHidden;
-      state._avaliacao = s._avaliacao ? cloneJson(s._avaliacao) : null;
+      // Recalcula a avaliação ao restaurar e aplica o estado visual padrão:
+      // hipóteses/justificativa fechadas quando a prévia for favorável.
+      state.hipotesesPanelHidden = true;
+      state._avaliacao = null;
 
       // formulários
       if ($("numProcesso"))
