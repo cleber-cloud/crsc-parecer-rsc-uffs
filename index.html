@@ -95,15 +95,21 @@
       </div>
       <div id="impedimentoAlert" class="alert alert-warn hidden" style="margin-top:1rem"></div>
       <div style="margin-top:1rem">
-        <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.5rem">
           <label style="margin:0">Assinantes da CRSC (titular e suplente por segmento)</label>
-          <button type="button" class="btn btn-secondary btn-sm" id="toggleSigners">Mostrar / ocultar</button>
         </div>
         <div id="signersPanel" class="signers-panel">
           <p class="muted small" style="margin:.35rem 0 .5rem">
             Marcar o <strong>titular</strong> desmarca o suplente do mesmo segmento e vice-versa.
           </p>
           <div id="signers" class="signers"></div>
+        </div>
+        <div id="relatorPanel" class="relator-panel">
+          <label for="relatorSelect">Relator *</label>
+          <select id="relatorSelect" disabled>
+            <option value="">Selecione um dos assinantes selecionados...</option>
+          </select>
+          <p id="relatorHelp" class="muted small">Selecione os assinantes para indicar o relator.</p>
         </div>
       </div>
     </section>
@@ -158,22 +164,37 @@
       </div>
     </section>
 
+    <section class="card hidden" id="stepMemorial">
+      <h3>4. Memorial</h3>
+      <p class="memorial-prompt">Análise do mérito do memorial apresentado.</p>
+      <div id="memorialOptions" class="memorial-options" role="group" aria-label="Avaliação do memorial">
+        <button type="button" class="memorial-option memorial-ok selected" id="btnMemorialFavoravel" aria-pressed="true">
+          <span class="memorial-check" aria-hidden="true">✓</span>
+          <span>Favorável</span>
+        </button>
+        <button type="button" class="memorial-option memorial-no" id="btnMemorialNaoFavoravel" aria-pressed="false">
+          <span class="memorial-check" aria-hidden="true">✓</span>
+          <span>Não favorável</span>
+        </button>
+      </div>
+    </section>
+
     <section class="card hidden" id="step3">
-      <h3>4. Análise e parecer</h3>
+      <h3>5. Análise e parecer</h3>
       <div id="metricsBox" class="metrics"></div>
       <div id="hipotesesBox" class="alert alert-info hidden" style="margin-top:1rem"></div>
 
-      <div style="margin-top:1.25rem">
+      <div id="hipotesesSection" style="margin-top:1.25rem">
         <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem">
           <label style="margin:0">Hipóteses de indeferimento — art. 14 do Decreto nº 13.048/2026</label>
-          <button type="button" class="btn btn-secondary btn-sm" id="toggleHipoteses">Mostrar / ocultar</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="toggleHipoteses">Mostrar Hipóteses de Indeferimento</button>
         </div>
         <div id="hipotesesPanel" class="hipoteses-panel">
           <div id="hipotesesChecks"></div>
         </div>
       </div>
 
-      <div style="margin-top:1rem">
+      <div id="justificativaSection" style="margin-top:1rem">
         <label for="justificativa">Justificativa (obrigatória se não favorável)</label>
         <textarea id="justificativa" placeholder="Marque os incisos do art. 14 acima para preencher o texto literal."></textarea>
       </div>
@@ -184,7 +205,7 @@
         <p class="muted small" style="margin:.35rem 0 0">Padrão: data de hoje. Ajuste se necessário.</p>
       </div>
 
-      <div class="btn-row">
+      <div class="btn-row btn-row-final">
         <button type="button" class="btn btn-primary" id="btnParecer" disabled>Gerar parecer PDF</button>
       </div>
     </section>

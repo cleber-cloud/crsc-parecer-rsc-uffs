@@ -181,6 +181,28 @@
     };
   }
 
+  function assinantesOrdenados(ctx) {
+    const signers = Array.isArray(ctx.assinantes) ? ctx.assinantes : [];
+    const relatorSiape = ctx.relator && String(ctx.relator.siape || "");
+    const relator = relatorSiape
+      ? signers.find((s) => String(s.siape) === relatorSiape)
+      : null;
+    const restantes = relator
+      ? signers.filter((s) => String(s.siape) !== relatorSiape)
+      : signers;
+    return relator
+      ? [
+          { membro: relator, isRelator: true },
+          ...restantes.map((membro) => ({ membro, isRelator: false })),
+        ]
+      : restantes.map((membro) => ({ membro, isRelator: false }));
+  }
+
+  function linhaAssinante(item) {
+    const s = item.membro;
+    return `SIAPE ${s.siape} — ${s.segmento || ""} (${s.funcao || "Titular"})`;
+  }
+
   async function gerarParecerPdf(ctx) {
     const { PDFDocument, rgb } = global.PDFLib;
     const pdf = await PDFDocument.create();
@@ -320,7 +342,16 @@
     }
     gap(10);
 
-    text("3. Parecer CRSC", { size: 12, bold: true });
+    text("3. Memorial", { size: 12, bold: true });
+    gap(4);
+    text("Análise do mérito do memorial apresentado.", { size: 10, lh: 13 });
+    kv(
+      "Resultado: ",
+      ctx.memorialFavoravel === false ? "Não favorável" : "Favorável"
+    );
+    gap(10);
+
+    text("4. Parecer CRSC", { size: 12, bold: true });
     gap(4);
     kv("Parecer: ", fav ? "Favorável" : "Não Favorável");
     gap(4);
@@ -355,8 +386,8 @@
     );
     gap(14);
 
-    // 4. Assinaturas: título e unidade à esquerda; nomes centralizados
-    text("4. Assinaturas da CRSC-PCCTAE", {
+    // 5. Assinaturas: título e unidade à esquerda; nomes centralizados
+    text("5. Assinaturas da CRSC-PCCTAE", {
       size: 12,
       bold: true,
     });
@@ -369,14 +400,17 @@
     );
     gap(12);
 
-    const signers = ctx.assinantes || [];
-    signers.forEach((s) => {
+    assinantesOrdenados(ctx).forEach((item) => {
+      const s = item.membro;
       ensure(48);
       text(`${s.nome}`, { size: 10, bold: true, align: "center" });
-      text(`SIAPE ${s.siape} — ${s.segmento || ""} (${s.funcao || "Titular"})`, {
+      text(linhaAssinante(item), {
         size: 9,
         align: "center",
       });
+      if (item.isRelator) {
+        text("Relator(a)", { size: 9, bold: true, align: "center" });
+      }
       gap(22);
     });
 
@@ -634,13 +668,17 @@
         { size: 9, color: rgb(0.5, 0.2, 0.1) }
       );
     }
-    signers.forEach((s) => {
+    assinantesOrdenados(ctx).forEach((item) => {
+      const s = item.membro;
       ensure(48);
       text(`${s.nome}`, { size: 10, bold: true, align: "center" });
-      text(`SIAPE ${s.siape} — ${s.segmento || ""} (${s.funcao || "Titular"})`, {
+      text(linhaAssinante(item), {
         size: 9,
         align: "center",
       });
+      if (item.isRelator) {
+        text("Relator(a)", { size: 9, bold: true, align: "center" });
+      }
       gap(22);
     });
 
