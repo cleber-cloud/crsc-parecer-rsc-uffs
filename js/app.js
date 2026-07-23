@@ -23,9 +23,12 @@
     dataEnvioDiligencia: "",
     dataRetornoDiligencia: "",
     vigencia: "",
+    memorialFavoravel: true,
     hipotesesSelecionadas: [],
     /** @type {Record<string, boolean>} chave siape → marcado */
     signerChecked: {},
+    /** SIAPE do relator, sempre pertencente aos assinantes selecionados */
+    relatorSiape: "",
     /** ocultar linhas com qtdDeclarada === 0 */
     hideZeroCriterios: true,
     /** permitir editar quantidades declaradas no catálogo */
@@ -43,8 +46,6 @@
     /** diligência geral (sem vínculo a critério) */
     diligenciaGeral: "",
     diligenciaGeralOpen: false,
-    /** painéis recolhidos */
-    signersPanelHidden: false,
     hipotesesPanelHidden: false,
   };
 
@@ -63,7 +64,11 @@
     { key: "siape", label: "SIAPE", type: "text" },
     { key: "cargo", label: "Cargo", type: "text" },
     { key: "lotacao", label: "Lotação", type: "text" },
-    { key: "dataIngresso", label: "Data de ingresso", type: "text" },
+    {
+      key: "dataIngresso",
+      label: "Data de início do exercício no cargo atual",
+      type: "text",
+    },
     { key: "email", label: "E-mail", type: "email" },
     { key: "nivelRsc", label: "Nível RSC pedido", type: "nivel" },
     {
@@ -324,6 +329,10 @@
     box.querySelectorAll(".hip-cb").forEach((cb) => {
       cb.addEventListener("change", () => {
         const id = cb.getAttribute("data-id");
+        if (!state.memorialFavoravel && id === "VIII" && !cb.checked) {
+          cb.checked = true;
+          return;
+        }
         if (cb.checked) {
           if (!state.hipotesesSelecionadas.includes(id))
             state.hipotesesSelecionadas.push(id);
@@ -347,6 +356,21 @@
     state.hipotesesSelecionadas = [...new Set(sugestoes || [])];
     renderHipotesesDropdown();
     syncJustificativaFromHipoteses();
+  }
+
+  function setHipotesesOpen(open) {
+    const panel = $("hipotesesPanel");
+    const justificativaSection = $("justificativaSection");
+    const toggle = $("toggleHipoteses");
+    state.hipotesesPanelHidden = !open;
+    if (panel) panel.classList.toggle("hidden", !open);
+    if (justificativaSection)
+      justificativaSection.classList.toggle("hidden", !open);
+    if (toggle) {
+      toggle.textContent = open
+        ? "Ocultar Hipóteses de Indeferimento"
+        : "Mostrar Hipóteses de Indeferimento";
+    }
   }
 
   /**
@@ -383,6 +407,7 @@
     const id = state.comissaoId;
     if (!id) {
       box.innerHTML = '<p class="muted">Selecione a unidade da CRSC.</p>';
+      renderRelator();
       return;
     }
     const com = RSCComissoes.getComissao(id);
@@ -416,8 +441,8 @@
           return empty;
         }
         const lab = document.createElement("label");
-        lab.className = "signer";
         const checked = !!state.signerChecked[m.siape];
+        lab.className = "signer" + (checked ? " selected" : "");
         lab.innerHTML = `<input type="checkbox" class="signer-cb" data-siape="${m.siape}" data-role="${role}" data-pair="${pairIndex}" ${
           checked ? "checked" : ""
         } />
@@ -447,10 +472,64 @@
             }
           });
         }
+        box.querySelectorAll(".signer-cb").forEach((input) => {
+          const label = input.closest("label.signer");
+          if (label) label.classList.toggle("selected", input.checked);
+        });
+        renderRelator();
+        scheduleAutosave();
       });
     });
 
+    renderRelator();
     checkImpedimento();
+  }
+
+  function renderRelator() {
+    const panel = $("relatorPanel");
+    const select = $("relatorSelect");
+    const help = $("relatorHelp");
+    if (!panel || !select) return;
+
+    const assinantes = collectAssinantes();
+    const relatorValido = assinantes.some(
+      (s) => String(s.siape) === String(state.relatorSiape || "")
+    );
+    if (!relatorValido) state.relatorSiape = "";
+
+    select.innerHTML = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = assinantes.length
+      ? "Selecione o relator..."
+      : "Nenhum assinante selecionado";
+    select.appendChild(placeholder);
+
+    assinantes.forEach((s) => {
+      const option = document.createElement("option");
+      option.value = String(s.siape);
+      option.textContent = `${s.nome} — SIAPE ${s.siape}`;
+      select.appendChild(option);
+    });
+
+    select.value = state.relatorSiape || "";
+    select.disabled = assinantes.length === 0;
+    if (help) {
+      help.textContent = assinantes.length
+        ? "O relator deve ser um dos assinantes selecionados e aparecerá primeiro nos PDFs."
+        : "Selecione ao menos um assinante para indicar o relator.";
+    }
+  }
+
+  function renderMemorial() {
+    const favoravel = state.memorialFavoravel !== false;
+    const btnOk = $("btnMemorialFavoravel");
+    const btnNo = $("btnMemorialNaoFavoravel");
+    if (!btnOk || !btnNo) return;
+    btnOk.classList.toggle("selected", favoravel);
+    btnNo.classList.toggle("selected", !favoravel);
+    btnOk.setAttribute("aria-pressed", favoravel ? "true" : "false");
+    btnNo.setAttribute("aria-pressed", favoravel ? "false" : "true");
   }
 
   function checkImpedimento() {
@@ -505,7 +584,7 @@
       nome: "Nome",
       siape: "SIAPE",
       cargo: "Cargo",
-      dataIngresso: "Ingresso",
+      dataIngresso: "Início do exercício no cargo atual",
       lotacao: "Lotação",
       email: "E-mail",
       nivelRsc: "Nível RSC",
@@ -944,7 +1023,7 @@
             openObs
               ? `<div class="obs-box" data-obs-box="${idx}">
                   <label for="obsTxt${idx}">Observação da comissão:</label>
-                  <textarea id="obsTxt${idx}" placeholder="Anotação interna ou ressalva sobre este critério…">${esc(
+                  <textarea id="obsTxt${idx}" placeholder="Obrigatório preencher nos casos de quantidade aceita diferente da declarada. Anotação interna ou ressalva sobre este critério…">${esc(
                     it.observacao || ""
                   )}</textarea>
                   <div class="btn-row">
@@ -972,13 +1051,45 @@
         '<p class="muted">Nenhum critério com pontuação declarada. Use “Mostrar todos os critérios”.</p>';
     }
 
+    function saveOpenDrafts() {
+      if (!state.req || !state.req.itens) return;
+      let saved = false;
+
+      if (state.diligenciaOpenIdx != null) {
+        const i = state.diligenciaOpenIdx;
+        const ta = document.getElementById("dilTxt" + i);
+        const txt = (ta && ta.value.trim()) || "";
+        if (txt) {
+          const atual = state.req.itens[i].diligencia;
+          state.req.itens[i].diligencia = {
+            texto: txt,
+            em: (atual && atual.em) || new Date().toISOString(),
+          };
+          saved = true;
+        }
+      }
+
+      if (state.obsOpenIdx != null) {
+        const i = state.obsOpenIdx;
+        const ta = document.getElementById("obsTxt" + i);
+        const txt = (ta && ta.value.trim()) || "";
+        if (txt) {
+          state.req.itens[i].observacao = txt;
+          saved = true;
+        }
+      }
+
+      if (saved) scheduleAutosave();
+    }
+
     function refreshItemPts(i) {
       const it = state.req.itens[i];
       const pu = Number(it.pontosUnitario) || 0;
       const q = Number(it.qtdAceita) || 0;
       it.pontosObtidos =
         Math.round((Number(it.qtdDeclarada) || 0) * pu * 10) / 10;
-      const pts = Math.round(q * pu * 10) / 10;
+      const pts = pontosItem(it);
+      it.pontosAceitos = pts;
       const cell = box.querySelector(`.pts-aceitos[data-idx="${i}"]`);
       if (cell) cell.textContent = String(pts);
       const card = box.querySelector(`.crit-card[data-idx="${i}"]`);
@@ -992,22 +1103,31 @@
       scheduleAutosave();
     }
 
+    function openObservationIfNeeded(i) {
+      const it = state.req.itens[i];
+      const qtdDecl = Number(it.qtdDeclarada) || 0;
+      const qtdAceita = Number(it.qtdAceita) || 0;
+      if (qtdAceita === qtdDecl || state.obsOpenIdx === i) return;
+      saveOpenDrafts();
+      state.diligenciaOpenIdx = null;
+      state.obsOpenIdx = i;
+      renderChecklist();
+      const ta = document.getElementById("obsTxt" + i);
+      if (ta) ta.focus();
+    }
+
     box.querySelectorAll(".qtd-decl").forEach((el) => {
       el.addEventListener("input", () => {
         const i = Number(el.getAttribute("data-idx"));
         let v = Number(el.value);
         if (!Number.isFinite(v) || v < 0) v = 0;
         state.req.itens[i].qtdDeclarada = v;
-        // se aceita era igual à antiga declarada ou maior que a nova, alinha
-        const qa = Number(state.req.itens[i].qtdAceita);
-        if (!Number.isFinite(qa) || qa > v) {
-          state.req.itens[i].qtdAceita = v;
-          const ace = box.querySelector(`.qtd-aceita[data-idx="${i}"]`);
-          if (ace) ace.value = String(v);
-        }
         state.req.itens[i].aceito =
           Number(state.req.itens[i].qtdAceita) > 0 ? "ok" : "no";
         refreshItemPts(i);
+      });
+      el.addEventListener("change", () => {
+        openObservationIfNeeded(Number(el.getAttribute("data-idx")));
       });
     });
 
@@ -1016,16 +1136,19 @@
         const i = Number(el.getAttribute("data-idx"));
         let v = Number(el.value);
         if (!Number.isFinite(v) || v < 0) v = 0;
-        const max = Number(state.req.itens[i].qtdDeclarada);
-        if (Number.isFinite(max) && max >= 0 && v > max) v = max;
         state.req.itens[i].qtdAceita = v;
+        el.value = String(v);
         state.req.itens[i].aceito = v <= 0 ? "no" : "ok";
         refreshItemPts(i);
+      });
+      el.addEventListener("change", () => {
+        openObservationIfNeeded(Number(el.getAttribute("data-idx")));
       });
     });
 
     box.querySelectorAll(".chip-dil").forEach((btn) => {
       btn.addEventListener("click", () => {
+        saveOpenDrafts();
         const i = Number(btn.getAttribute("data-idx"));
         state.obsOpenIdx = null;
         state.diligenciaOpenIdx =
@@ -1035,6 +1158,7 @@
     });
     box.querySelectorAll(".chip-obs").forEach((btn) => {
       btn.addEventListener("click", () => {
+        saveOpenDrafts();
         const i = Number(btn.getAttribute("data-idx"));
         state.diligenciaOpenIdx = null;
         state.obsOpenIdx = state.obsOpenIdx === i ? null : i;
@@ -1127,10 +1251,60 @@
     }));
   }
 
+  function avaliarAtual() {
+    const quantitativa = RSCRegras.avaliar(state.req, itensParaAvaliacao());
+    const memorialFavoravel = state.memorialFavoravel !== false;
+    return {
+      ...quantitativa,
+      favoravel: memorialFavoravel && quantitativa.favoravel,
+      quantitativaFavoravel: quantitativa.favoravel,
+      memorialFavoravel,
+    };
+  }
+
   function updateAvaliacao() {
     if (!state.req) return;
-    const av = RSCRegras.avaliar(state.req, itensParaAvaliacao());
+    const av = avaliarAtual();
+    const previousFavoravel = state._avaliacao
+      ? !!state._avaliacao.favoravel
+      : null;
+    const previousQuantitativaFavoravel = state._avaliacao
+      ? state._avaliacao.quantitativaFavoravel != null
+        ? !!state._avaliacao.quantitativaFavoravel
+        : !!state._avaliacao.favoravel
+      : null;
+    const previousMemorialFavoravel = state._avaliacao
+      ? state._avaliacao.memorialFavoravel != null
+        ? !!state._avaliacao.memorialFavoravel
+        : true
+      : null;
     state._avaliacao = av;
+
+    if (!av.memorialFavoravel) {
+      const ids = new Set(
+        av.quantitativaFavoravel ? [] : av.sugestoesArt14 || []
+      );
+      (state.hipotesesSelecionadas || []).forEach((id) => ids.add(id));
+      ids.add("VIII");
+      state.hipotesesSelecionadas = [...ids];
+      renderHipotesesDropdown();
+      syncJustificativaFromHipoteses();
+    } else if (av.quantitativaFavoravel && previousFavoravel === false) {
+      const onlyMemorialChanged =
+        previousMemorialFavoravel === false &&
+        previousQuantitativaFavoravel === true;
+      if (!onlyMemorialChanged) {
+        state.hipotesesSelecionadas = [];
+        renderHipotesesDropdown();
+        const justificativa = $("justificativa");
+        if (justificativa) justificativa.value = "";
+        scheduleAutosave();
+      } else if (av.favoravel) {
+        const justificativa = $("justificativa");
+        if (justificativa) justificativa.value = "";
+        scheduleAutosave();
+      }
+    }
 
     const cx =
       av.nivel && av.nivel.complexidade && av.nivel.complexidade.length
@@ -1145,7 +1319,7 @@
       <div class="metric"><div class="k">Itens com qtd &gt; 0</div><div class="v">${av.qtdCriterios}</div></div>
       <div class="metric"><div class="k">Complexidade</div><div class="v" style="font-size:1rem">${cx}</div></div>
       <div class="metric"><div class="k">Saldo</div><div class="v">${av.saldoPontuacao}</div></div>
-      <div class="metric"><div class="k">Prévia art. 5º</div><div class="v" style="font-size:1rem">${
+      <div class="metric metric-preview ${av.favoravel ? "ok" : "no"}"><div class="k">Prévia art. 5º</div><div class="v" style="font-size:1rem">${
         av.favoravel ? "Favorável" : "Não favorável"
       }</div></div>
     `;
@@ -1154,7 +1328,14 @@
     if (av.favoravel) {
       hyp.className = "alert alert-ok";
       hyp.innerHTML =
-        "<strong>Prévia quantitativa:</strong> pontuação, quantidade de critérios e complexidade atendidos com as quantidades aceitas. Confira o mérito documental e o art. 14.";
+        "<strong>Prévia quantitativa:</strong> pontuação, quantidade de critérios e complexidade atendidos com as quantidades aceitas. Confira o mérito documental.";
+    } else if (!av.memorialFavoravel) {
+      hyp.className = "alert alert-err";
+      hyp.innerHTML =
+        "<strong>Prévia não favorável:</strong> o memorial foi avaliado como não favorável. A hipótese VIII foi marcada automaticamente." +
+        (!av.quantitativaFavoravel
+          ? " Os requisitos quantitativos também não foram atendidos."
+          : "");
     } else {
       hyp.className = "alert alert-err";
       hyp.innerHTML =
@@ -1164,6 +1345,14 @@
       if (av.sugestoesArt14?.length) applySugestoesHipoteses(av.sugestoesArt14);
     }
     hyp.classList.remove("hidden");
+
+    const hipotesesSection = $("hipotesesSection");
+    if (hipotesesSection) hipotesesSection.classList.remove("hidden");
+    if (!av.memorialFavoravel && previousMemorialFavoravel !== false) {
+      setHipotesesOpen(true);
+    } else if (previousFavoravel !== (av.favoravel ? true : false)) {
+      setHipotesesOpen(!av.favoravel);
+    }
     $("btnParecer").disabled = false;
   }
 
@@ -1226,6 +1415,8 @@
         onProgress: setProgress,
       });
       state.req = data;
+      state.memorialFavoravel = true;
+      state._avaliacao = null;
       state.hipotesesSelecionadas = [];
       state.confirmedFields = {};
       state.diligenciaOpenIdx = null;
@@ -1239,7 +1430,9 @@
       renderCompare();
       renderHipotesesDropdown();
       $("step2").classList.remove("hidden");
+      $("stepMemorial").classList.remove("hidden");
       $("step3").classList.remove("hidden");
+      renderMemorial();
       updateAvaliacao();
       checkImpedimento();
       updateDiligenciaBtn();
@@ -1309,6 +1502,54 @@
     return membros.filter((m) => state.signerChecked[m.siape]);
   }
 
+  function collectRelator() {
+    const siape = String(state.relatorSiape || "");
+    return (
+      collectAssinantes().find((m) => String(m.siape) === siape) || null
+    );
+  }
+
+  function requireRelator() {
+    if (collectRelator()) return true;
+    toast(
+      "Indique o relator entre os assinantes selecionados antes de gerar o PDF.",
+      "err"
+    );
+    return false;
+  }
+
+  function requireObservacaoParaQtdDiferente() {
+    if (!state.req) return true;
+    const pendentes = (state.req.itens || []).filter((it) => {
+      const qtdDecl = Number(it.qtdDeclarada) || 0;
+      const qtdAceita = Number(it.qtdAceita) || 0;
+      return (
+        qtdAceita !== qtdDecl && !String(it.observacao || "").trim()
+      );
+    });
+    if (!pendentes.length) return true;
+
+    const primeiro = pendentes[0];
+    const idx = state.req.itens.indexOf(primeiro);
+    const ids = pendentes
+      .slice(0, 3)
+      .map((it, pos) => it.criterionId || `item ${pos + 1}`)
+      .join(", ");
+    if ((Number(primeiro.qtdDeclarada) || 0) <= 0) {
+      state.hideZeroCriterios = false;
+    }
+    state.diligenciaOpenIdx = null;
+    state.obsOpenIdx = idx;
+    renderChecklist();
+    const ta = document.getElementById("obsTxt" + idx);
+    if (ta) ta.focus();
+    toast(
+      `Preencha a observação dos itens com QTD ACEITA diferente da QTD DECL. Pendentes: ${ids}.`,
+      "err"
+    );
+    return false;
+  }
+
   function buildBaseCtx(av) {
     return {
       req: state.req,
@@ -1325,6 +1566,8 @@
       vigencia: state.vigencia || fmtDateBr(todayISO()),
       comissao: RSCComissoes.getComissao(state.comissaoId),
       assinantes: collectAssinantes(),
+      relator: collectRelator(),
+      memorialFavoravel: state.memorialFavoravel !== false,
       avaliacao: av,
       complexidadeDesc: av.nivel?.complexidadeDesc,
       itensRelatorio: (state.req.itens || [])
@@ -1355,6 +1598,8 @@
     if (!state.comissaoId) return toast("Selecione o campus/Reitoria.", "err");
     if (!state.numeroProcesso.trim())
       return toast("Informe o número do processo SIPAC.", "err");
+    if (!requireRelator()) return;
+    if (!requireObservacaoParaQtdDiferente()) return;
     if (state.diligencias) {
       if (!state.dataEnvioDiligencia || !state.dataRetornoDiligencia) {
         return toast(
@@ -1364,16 +1609,25 @@
       }
     }
 
-    const av = RSCRegras.avaliar(state.req, itensParaAvaliacao());
+    const av = avaliarAtual();
+    const justDigitada = $("justificativa")
+      ? $("justificativa").value.trim()
+      : "";
     if (!av.favoravel && !state.hipotesesSelecionadas.length) {
       return toast(
         "Parecer não favorável: marque ao menos um inciso do art. 14 (texto literal).",
         "err"
       );
     }
+    if (!av.favoravel && !justDigitada) {
+      return toast(
+        "Parecer não favorável: preencha a justificativa antes de gerar o PDF.",
+        "err"
+      );
+    }
 
     const just =
-      $("justificativa").value.trim() ||
+      justDigitada ||
       RSCRegras.textoJustificativa(state.hipotesesSelecionadas);
 
     const ctx = {
@@ -1410,6 +1664,8 @@
     if (!state.comissaoId) return toast("Selecione o campus/Reitoria.", "err");
     if (!state.numeroProcesso.trim())
       return toast("Informe o número do processo SIPAC.", "err");
+    if (!requireRelator()) return;
+    if (!requireObservacaoParaQtdDiferente()) return;
 
     const itensDil = (state.req.itens || []).filter(
       (i) => i.diligencia && i.diligencia.texto
@@ -1425,14 +1681,16 @@
     // Data da diligência = hoje (não usa o checkbox nem a data de retorno)
     const dataDil = fmtDateBr(todayISO());
 
-    const av = RSCRegras.avaliar(state.req, itensParaAvaliacao());
+    const av = avaliarAtual();
+    const relator = collectRelator();
     const ctx = {
       req: state.req,
       numeroProcesso: state.numeroProcesso.trim(),
       dataRequerimento: state.dataRequerimento || "—",
       dataEnvioDiligencia: dataDil,
       comissao: RSCComissoes.getComissao(state.comissaoId),
-      assinantes: collectAssinantes(),
+      assinantes: relator ? [relator] : [],
+      relator,
       avaliacao: av,
       diligenciaGeral: dilGeral,
       itensDiligencia: itensDil.map((i) => ({
@@ -1494,8 +1752,10 @@
         dataEnvioDiligencia: state.dataEnvioDiligencia,
         dataRetornoDiligencia: state.dataRetornoDiligencia,
         vigencia: state.vigencia,
+        memorialFavoravel: state.memorialFavoravel !== false,
         hipotesesSelecionadas: cloneJson(state.hipotesesSelecionadas || []),
         signerChecked: cloneJson(state.signerChecked || {}),
+        relatorSiape: state.relatorSiape || "",
         hideZeroCriterios: !!state.hideZeroCriterios,
         editQtdDeclarada: !!state.editQtdDeclarada,
         compareOpen: !!state.compareOpen,
@@ -1504,7 +1764,6 @@
         obsOpenIdx: null,
         diligenciaGeral: state.diligenciaGeral || "",
         diligenciaGeralOpen: false,
-        signersPanelHidden: !!state.signersPanelHidden,
         hipotesesPanelHidden: !!state.hipotesesPanelHidden,
         _avaliacao: state._avaliacao ? cloneJson(state._avaliacao) : null,
       },
@@ -1527,6 +1786,8 @@
       },
       ui: {
         step2Visible: !$("step2") || !$("step2").classList.contains("hidden"),
+        stepMemorialVisible:
+          !$("stepMemorial") || !$("stepMemorial").classList.contains("hidden"),
         step3Visible: !$("step3") || !$("step3").classList.contains("hidden"),
         fileName: ($("fileName") && $("fileName").textContent) || "",
       },
@@ -1666,16 +1927,20 @@
       const json = JSON.stringify(snap, null, 2);
       const blob = new Blob([json], { type: "application/json;charset=utf-8" });
       const a = document.createElement("a");
-      const stamp = new Date()
-        .toISOString()
-        .replace(/[:.]/g, "-")
-        .slice(0, 19);
-      const safe = (
-        (snap.state.req && snap.state.req.siape) ||
-        "sessao"
-      ).replace(/\W/g, "");
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      const stamp =
+        `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+        `_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+      const req = snap.state.req || {};
+      const safeName = String(req.nome || "servidor")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "") || "servidor";
+      const safeSiape = String(req.siape || "sem-siape").replace(/[^a-zA-Z0-9-]+/g, "");
       a.href = URL.createObjectURL(blob);
-      a.download = `Backup_CRSC_Parecer_${safe}_${stamp}.json`;
+      a.download = `Backup_CRSC_Parecer_${safeName}_${safeSiape}_${stamp}.json`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
       persistSession();
@@ -1761,10 +2026,13 @@
       state.dataRetornoDiligencia =
         s.dataRetornoDiligencia || f.dataRetornoDil || "";
       state.vigencia = s.vigencia || "";
+      state.memorialFavoravel =
+        s.memorialFavoravel != null ? !!s.memorialFavoravel : true;
       state.hipotesesSelecionadas = cloneJson(
         s.hipotesesSelecionadas || []
       );
       state.signerChecked = cloneJson(s.signerChecked || {});
+      state.relatorSiape = s.relatorSiape || "";
       state.hideZeroCriterios =
         s.hideZeroCriterios != null ? !!s.hideZeroCriterios : true;
       state.editQtdDeclarada = !!s.editQtdDeclarada;
@@ -1774,7 +2042,6 @@
       state.obsOpenIdx = null;
       state.diligenciaGeral = s.diligenciaGeral || "";
       state.diligenciaGeralOpen = false;
-      state.signersPanelHidden = !!s.signersPanelHidden;
       state.hipotesesPanelHidden = !!s.hipotesesPanelHidden;
       state._avaliacao = s._avaliacao ? cloneJson(s._avaliacao) : null;
 
@@ -1809,18 +2076,6 @@
 
       syncDiligenciaDatasUI();
       renderSigners();
-      const sigPanel = $("signersPanel");
-      const toggleSig = $("toggleSigners");
-      if (sigPanel) {
-        if (state.signersPanelHidden) sigPanel.classList.add("hidden");
-        else sigPanel.classList.remove("hidden");
-      }
-      if (toggleSig) {
-        toggleSig.textContent = state.signersPanelHidden
-          ? "Mostrar assinantes"
-          : "Ocultar assinantes";
-      }
-
       renderHipotesesDropdown();
       const hipPanel = $("hipotesesPanel");
       if (hipPanel) {
@@ -1830,10 +2085,12 @@
 
       if (state.req) {
         $("step2").classList.remove("hidden");
+        $("stepMemorial").classList.remove("hidden");
         $("step3").classList.remove("hidden");
         const btnCmp = $("btnToggleCompare");
         if (btnCmp) btnCmp.disabled = false;
         renderIdent();
+        renderMemorial();
         renderChecklist();
         renderCompare();
         updateAvaliacao();
@@ -1841,6 +2098,7 @@
         updateDiligenciaBtn();
       } else {
         $("step2").classList.add("hidden");
+        $("stepMemorial").classList.add("hidden");
         $("step3").classList.add("hidden");
         if ($("identBox")) {
           $("identBox").classList.add("hidden");
@@ -1898,8 +2156,10 @@
     state.dataEnvioDiligencia = "";
     state.dataRetornoDiligencia = "";
     state.vigencia = fmtDateBr(todayISO());
+    state.memorialFavoravel = true;
     state.hipotesesSelecionadas = [];
     state.signerChecked = {};
+    state.relatorSiape = "";
     state.hideZeroCriterios = true;
     state.editQtdDeclarada = false;
     state.compareOpen = false;
@@ -1908,7 +2168,6 @@
     state.obsOpenIdx = null;
     state.diligenciaGeral = "";
     state.diligenciaGeralOpen = false;
-    state.signersPanelHidden = false;
     state.hipotesesPanelHidden = false;
     state._avaliacao = null;
 
@@ -1936,6 +2195,7 @@
       $("compareBox").innerHTML = "";
     }
     if ($("step2")) $("step2").classList.add("hidden");
+    if ($("stepMemorial")) $("stepMemorial").classList.add("hidden");
     if ($("step3")) $("step3").classList.add("hidden");
     if ($("checklistBody")) $("checklistBody").innerHTML = "";
     if ($("metricsBox")) $("metricsBox").innerHTML = "";
@@ -1946,6 +2206,7 @@
 
     syncDiligenciaDatasUI();
     renderSigners();
+    renderMemorial();
     renderHipotesesDropdown();
     updateDiligenciaBtn();
     updateSessionStatus(null);
@@ -1973,6 +2234,7 @@
 
   function bind() {
     fillUnidades();
+    renderMemorial();
     renderHipotesesDropdown();
     updateSessionStatus(null);
 
@@ -2008,7 +2270,29 @@
     $("selUnidade").addEventListener("change", (e) => {
       state.comissaoId = e.target.value;
       state.signerChecked = {};
+      state.relatorSiape = "";
       renderSigners();
+      scheduleAutosave();
+    });
+    $("relatorSelect").addEventListener("change", (e) => {
+      state.relatorSiape = e.target.value || "";
+      scheduleAutosave();
+    });
+    $("btnMemorialFavoravel").addEventListener("click", () => {
+      state.memorialFavoravel = true;
+      state.hipotesesSelecionadas = state.hipotesesSelecionadas.filter(
+        (id) => id !== "VIII"
+      );
+      renderHipotesesDropdown();
+      syncJustificativaFromHipoteses();
+      renderMemorial();
+      updateAvaliacao();
+      scheduleAutosave();
+    });
+    $("btnMemorialNaoFavoravel").addEventListener("click", () => {
+      state.memorialFavoravel = false;
+      renderMemorial();
+      updateAvaliacao();
       scheduleAutosave();
     });
     $("numProcesso").addEventListener("input", (e) => {
@@ -2181,26 +2465,10 @@
       toggle.addEventListener("click", () => {
         const panel = $("hipotesesPanel");
         if (!panel) return;
-        panel.classList.toggle("hidden");
-        state.hipotesesPanelHidden = panel.classList.contains("hidden");
+        setHipotesesOpen(panel.classList.contains("hidden"));
         scheduleAutosave();
       });
     }
-    // toggle painel assinantes
-    const toggleSig = $("toggleSigners");
-    if (toggleSig) {
-      toggleSig.addEventListener("click", () => {
-        const panel = $("signersPanel");
-        if (!panel) return;
-        panel.classList.toggle("hidden");
-        state.signersPanelHidden = panel.classList.contains("hidden");
-        toggleSig.textContent = state.signersPanelHidden
-          ? "Mostrar assinantes"
-          : "Ocultar assinantes";
-        scheduleAutosave();
-      });
-    }
-
     // Sempre puxa a sessão do IndexedDB (até limpar dados)
     loadPersistedSession()
       .then((restored) => {
