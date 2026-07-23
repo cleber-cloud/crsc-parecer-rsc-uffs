@@ -1641,7 +1641,7 @@
       const bytes = await RSCParecerPdf.gerarParecerPdf(ctx);
       downloadBytes(
         bytes,
-        `Parecer_RSC_${(state.req.siape || "servidor").replace(/\W/g, "")}_${state.numeroProcesso.replace(/\W/g, "_")}.pdf`
+        `Parecer_RSC_${nomeArquivoServidor(state.req)}_${state.req.siape || "servidor"}_${state.numeroProcesso.replace(/\W/g, "_")}.pdf`
       );
       toast("Parecer PDF gerado.", "ok");
     } catch (e) {
@@ -1657,6 +1657,16 @@
     a.download = filename;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+
+  function nomeArquivoServidor(req) {
+    return (
+      String((req && req.nome) || "servidor")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "") || "servidor"
+    );
   }
 
   async function gerarDiligencia() {
@@ -1710,7 +1720,7 @@
       const bytes = await RSCParecerPdf.gerarDiligenciaPdf(ctx);
       downloadBytes(
         bytes,
-        `Diligencia_RSC_${(state.req.siape || "servidor").replace(/\W/g, "")}_${state.numeroProcesso.replace(/\W/g, "_")}.pdf`
+        `Diligencia_RSC_${nomeArquivoServidor(state.req)}_${state.req.siape || "servidor"}_${state.numeroProcesso.replace(/\W/g, "_")}.pdf`
       );
       toast("PDF de diligência gerado (data de hoje).", "ok");
     } catch (e) {
